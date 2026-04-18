@@ -2,28 +2,15 @@ import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 
 export function LoginScreen() {
-  const [mode, setMode]         = useState<'signin' | 'signup'>('signin')
-  const [name, setName]         = useState('')
-  const [email, setEmail]       = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError]       = useState('')
-  const [loading, setLoading]   = useState(false)
+  const [mode, setMode]           = useState<'signin' | 'signup'>('signin')
+  const [name, setName]           = useState('')
+  const [email, setEmail]         = useState('')
+  const [password, setPassword]   = useState('')
+  const [error, setError]         = useState('')
+  const [loading, setLoading]     = useState(false)
+  const [checkEmail, setCheckEmail] = useState(false)
 
   function clearError() { setError('') }
-
-  async function handleGoogleSignIn() {
-    setError('')
-    setLoading(true)
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: window.location.origin },
-    })
-    if (error) {
-      setError(error.message)
-      setLoading(false)
-    }
-    // On success the page redirects — no need to setLoading(false)
-  }
 
   async function handleEmailAuth(e: React.FormEvent) {
     e.preventDefault()
@@ -31,7 +18,7 @@ export function LoginScreen() {
     setLoading(true)
 
     if (mode === 'signup') {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: { data: { name: name.trim() } },
@@ -39,8 +26,12 @@ export function LoginScreen() {
       if (error) {
         setError(error.message)
         setLoading(false)
+      } else if (!data.session) {
+        // Email confirmation required
+        setCheckEmail(true)
+        setLoading(false)
       }
-      // On success, onAuthStateChange in App.tsx handles the transition
+      // If session exists, onAuthStateChange in App.tsx handles the transition
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) {
@@ -51,13 +42,41 @@ export function LoginScreen() {
   }
 
   const canSubmit = mode === 'signup'
-    ? name.trim() && email && password
+    ? name.trim() && email && password.length >= 6
     : email && password
+
+  if (checkEmail) {
+    return (
+      <div className="flex flex-col min-h-dvh bg-[#0a0a0a] p-6 animate-fade-in">
+        <div className="flex-1 flex flex-col justify-center gap-6 text-center">
+          <p className="text-5xl">📬</p>
+          <div>
+            <h2 className="text-2xl font-bold text-white mb-2">Check your email</h2>
+            <p className="text-white/40 text-sm leading-relaxed">
+              We sent a confirmation link to<br />
+              <span className="text-white/70 font-medium">{email}</span>
+            </p>
+          </div>
+          <p className="text-white/25 text-xs">
+            Click the link in the email, then come back and sign in.
+          </p>
+          <button
+            type="button"
+            onClick={() => { setCheckEmail(false); setMode('signin') }}
+            className="w-full py-4 rounded-2xl border border-white text-white font-semibold text-base
+                       active:scale-[0.98] transition-all hover:bg-white/5"
+          >
+            Back to sign in
+          </button>
+        </div>
+        <p className="text-center text-white/15 text-xs font-mono mt-6">Powered by Supabase</p>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col min-h-dvh bg-[#0a0a0a] p-6 animate-fade-in">
       <div className="flex-1 flex flex-col justify-center">
-        {/* Logo */}
         <div className="mb-10 text-center">
           <p className="text-5xl mb-4">🦀</p>
           <h1 className="text-3xl font-bold text-white mb-2">Crab Hunt</h1>
@@ -65,28 +84,6 @@ export function LoginScreen() {
         </div>
 
         <div className="flex flex-col gap-4">
-          {/* Google button */}
-          <button
-            type="button"
-            onClick={handleGoogleSignIn}
-            disabled={loading}
-            className="w-full py-4 rounded-2xl border border-white/25 bg-white/[0.04] text-white font-semibold text-sm
-                       flex items-center justify-center gap-3
-                       active:scale-[0.98] transition-all hover:bg-white/8
-                       disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
-          >
-            <GoogleLogo />
-            Continue with Google
-          </button>
-
-          {/* Divider */}
-          <div className="flex items-center gap-3">
-            <div className="h-px flex-1 bg-white/10" />
-            <span className="text-xs font-mono text-white/25 tracking-widest uppercase">or</span>
-            <div className="h-px flex-1 bg-white/10" />
-          </div>
-
-          {/* Email/password form */}
           <form onSubmit={handleEmailAuth} className="flex flex-col gap-4">
             {mode === 'signup' && (
               <div className="flex flex-col gap-2 animate-slide-up">
@@ -125,6 +122,9 @@ export function LoginScreen() {
             <div className="flex flex-col gap-2">
               <label className="text-xs font-mono text-white/40 tracking-widest uppercase">
                 Password
+                {mode === 'signup' && (
+                  <span className="ml-2 normal-case tracking-normal text-white/20">min 6 characters</span>
+                )}
               </label>
               <input
                 type="password"
@@ -162,7 +162,6 @@ export function LoginScreen() {
             </button>
           </form>
 
-          {/* Mode toggle */}
           <p className="text-center text-white/30 text-xs mt-1">
             {mode === 'signin' ? (
               <>
@@ -195,16 +194,5 @@ export function LoginScreen() {
         Powered by Supabase
       </p>
     </div>
-  )
-}
-
-function GoogleLogo() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-    </svg>
   )
 }

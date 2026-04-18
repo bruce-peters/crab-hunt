@@ -1,13 +1,20 @@
 import "@supabase/functions-js/edge-runtime.d.ts"
 import { createClient } from "jsr:@supabase/supabase-js@2"
 
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+}
+
 /**
  * POST /generate-mcqs
- * Body: { event_id: string, requesting_player_id: string }
+ * Body: { requesting_player_id: string }
  *
- * Fetches all self_answers for the event, then uses OpenAI to generate
- * 10 MCQ questions about the OTHER players (not the requester).
- * Returns: { questions: MCQQuestion[] }
+ * 1. Finds the current event (most recently created).
+ * 2. Fetches all players in that event.
+ * 3. Fetches all self_answers for every player in the event.
+ * 4. Sends everything to GPT-4o-mini to generate 10 "get to know you" MCQs.
+ * 5. Returns: { event_id: string, questions: MCQQuestion[] }
  */
 
 interface QuestionOption {
@@ -24,11 +31,15 @@ interface MCQQuestion {
 }
 
 Deno.serve(async (req) => {
-  try {
-    const { event_id, requesting_player_id } = await req.json()
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: CORS })
+  }
 
-    if (!event_id || !requesting_player_id) {
-      return json({ error: "event_id and requesting_player_id are required" }, 400)
+  try {
+    const { requesting_player_id } = await req.json()
+
+    if (!requesting_player_id) {
+      return json({ error: "requesting_player_id is required" }, 400)
     }
 
     const supabase = createClient(
@@ -36,44 +47,93 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     )
 
-    // Fetch all self_answers for this event, excluding the requester's own answers
-    const { data: answers, error } = await supabase
-      .from("self_answers")
-      .select("player_id, question, answer, players(name, emoji)")
-      .eq("event_id", event_id)
-      .neq("player_id", requesting_player_id)
+    // ── 1. Get the current (most recently created) event ──────────────────────
+    const { data: event, error: eventError } = await supabase
+      .from("events")
+      .select("id, player_ids, cached_mcqs")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single()
 
-    if (error) return json({ error: error.message }, 500)
+    if (eventError || !event) {
+      return json({ error: "No active event found" }, 404)
+    }
+
+    const eventId: string = event.id
+    const playerIds: string[] = event.player_ids ?? []
+
+    if (playerIds.length === 0) {
+      return json({ error: "Event has no players" }, 404)
+    }
+
+    // ── 2a. Return cached questions if available ───────────────────────────────
+    if (event.cached_mcqs && Array.isArray(event.cached_mcqs) && event.cached_mcqs.length > 0) {
+      return json({ event_id: eventId, questions: event.cached_mcqs })
+    }
+
+    // ── 2. Fetch all players in the event ─────────────────────────────────────
+    const { data: players, error: playersError } = await supabase
+      .from("players")
+      .select("id, name, emoji")
+      .in("id", playerIds)
+
+    if (playersError || !players || players.length === 0) {
+      return json({ error: "Could not fetch players for this event" }, 500)
+    }
+
+    const playerMap: Record<string, { name: string; emoji: string }> = {}
+    for (const p of players) {
+      playerMap[p.id] = { name: p.name, emoji: p.emoji }
+    }
+
+    // ── 3. Fetch ALL self_answers for the event ────────────────────────────────
+    const { data: answers, error: answersError } = await supabase
+      .from("self_answers")
+      .select("player_id, question, answer")
+      .eq("event_id", eventId)
+
+    if (answersError) return json({ error: answersError.message }, 500)
     if (!answers || answers.length === 0) {
       return json({ error: "No self-answers found for this event" }, 404)
     }
 
-    // Group answers by player
+    // ── 4. Build player profiles (group Q&A by player) ────────────────────────
     const byPlayer: Record<string, { name: string; emoji: string; qa: { q: string; a: string }[] }> = {}
     for (const row of answers) {
-      const player = row.players as { name: string; emoji: string }
+      const p = playerMap[row.player_id]
+      if (!p) continue
       if (!byPlayer[row.player_id]) {
-        byPlayer[row.player_id] = { name: player.name, emoji: player.emoji, qa: [] }
+        byPlayer[row.player_id] = { name: p.name, emoji: p.emoji, qa: [] }
       }
       byPlayer[row.player_id].qa.push({ q: row.question, a: row.answer })
     }
 
     const playerProfiles = Object.values(byPlayer)
-      .map(p => `Player: ${p.name} ${p.emoji}\n${p.qa.map(qa => `Q: ${qa.q}\nA: ${qa.a}`).join("\n")}`)
+      .map(p =>
+        `Player: ${p.name} ${p.emoji}\n` +
+        p.qa.map(qa => `  Q: ${qa.q}\n  A: ${qa.a}`).join("\n")
+      )
       .join("\n\n")
 
+    // ── 5. Call OpenAI ─────────────────────────────────────────────────────────
     const openaiKey = Deno.env.get("OPENAI_API_KEY")
     if (!openaiKey) return json({ error: "OPENAI_API_KEY not set" }, 500)
 
-    const prompt = `You are generating multiple-choice trivia questions for a group scavenger hunt game.
-Based on the players' self-answers below, generate exactly 10 fun MCQ questions.
-Each question should be about ONE specific player (use their name in the question).
-Mix easy and tricky questions. Make wrong answers plausible but clearly wrong.
+    const prompt = `You are crafting fun "get to know you" multiple-choice questions for a group scavenger hunt game.
+
+Based on the personal answers each player gave about themselves, generate exactly 10 MCQ questions that help players learn interesting things about each other.
+
+Rules:
+- Each question must be about ONE specific player — use their name in the question text.
+- Spread questions across as many different players as possible.
+- Base every question directly on something a player actually said in their answers.
+- Wrong answer options should be plausible but clearly incorrect to someone who knows the person.
+- Keep tone fun, warm and light-hearted.
 
 Player profiles:
 ${playerProfiles}
 
-Return ONLY valid JSON in this exact shape (no markdown, no extra text):
+Return ONLY valid JSON — no markdown, no code fences, no extra text:
 {
   "questions": [
     {
@@ -112,7 +172,13 @@ Return ONLY valid JSON in this exact shape (no markdown, no extra text):
     const aiData = await aiRes.json()
     const content = JSON.parse(aiData.choices[0].message.content) as { questions: MCQQuestion[] }
 
-    return json(content)
+    // ── 6. Persist the generated questions so future calls use the cache ───────
+    await supabase
+      .from("events")
+      .update({ cached_mcqs: content.questions })
+      .eq("id", eventId)
+
+    return json({ event_id: eventId, ...content })
   } catch (e) {
     return json({ error: String(e) }, 500)
   }
@@ -121,6 +187,6 @@ Return ONLY valid JSON in this exact shape (no markdown, no extra text):
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: { ...CORS, "Content-Type": "application/json" },
   })
 }
