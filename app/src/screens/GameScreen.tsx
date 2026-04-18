@@ -104,11 +104,12 @@ export function GameScreen({
   useEffect(() => {
     generateMCQs(user.id)
       .then(({ questions }) => {
-        // Filter out questions about the current player — you shouldn't get quizzed about yourself
+        // Filter out questions about the current player — you shouldn't get quizzed about yourself.
+        // If filtering removes everything (e.g. only 1 player), fall back to the full set.
         const filtered = questions.filter(
           (q) => q.aboutPlayer.toLowerCase() !== user.name.toLowerCase()
         );
-        setQuestions(filtered);
+        setQuestions(filtered.length > 0 ? filtered : questions);
       })
       .catch((err) => setMcqError(err.message ?? "Failed to load questions"))
       .finally(() => setLoadingMCQs(false));

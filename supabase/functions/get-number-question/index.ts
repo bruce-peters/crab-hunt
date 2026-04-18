@@ -2,22 +2,15 @@ import "@supabase/functions-js/edge-runtime.d.ts"
 import { createClient } from "jsr:@supabase/supabase-js@2"
 
 /**
- * GET /get-number-question?event_id=<uuid>
+ * GET /get-number-question
  *
- * Returns the number-based question and answer for an event.
- * Called by the frontend to poll for when the question is ready.
- * Returns: { question: string | null, answer: string | null, is_started: boolean }
+ * Returns the number_based_question and number_based_question_answer for the
+ * most recent event. If the event hasn't started yet, returns "" and -1.
+ * No API key required.
  */
 
-Deno.serve(async (req) => {
+Deno.serve(async (_req) => {
   try {
-    const url = new URL(req.url)
-    const event_id = url.searchParams.get("event_id")
-
-    if (!event_id) {
-      return json({ error: "event_id query param is required" }, 400)
-    }
-
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -26,16 +19,17 @@ Deno.serve(async (req) => {
     const { data, error } = await supabase
       .from("events")
       .select("number_based_question, number_based_question_answer, is_started")
-      .eq("id", event_id)
+      .order("created_at", { ascending: false })
+      .limit(1)
       .single()
 
-    if (error) return json({ error: error.message }, 500)
-    if (!data) return json({ error: "Event not found" }, 404)
+    if (error || !data || !data.is_started) {
+      return json({ number_based_question: "", number_based_question_answer: -1 })
+    }
 
     return json({
-      question: data.number_based_question,
-      answer: data.number_based_question_answer,
-      is_started: data.is_started,
+      number_based_question: data.number_based_question ?? "",
+      number_based_question_answer: data.number_based_question_answer ?? -1,
     })
   } catch (e) {
     return json({ error: String(e) }, 500)

@@ -90,11 +90,11 @@ Deno.serve(async (req) => {
     const { data: answers, error: answersError } = await supabase
       .from("self_answers")
       .select("player_id, question, answer")
-      .eq("event_id", eventId)
+      .in("player_id", playerIds)
 
     if (answersError) return json({ error: answersError.message }, 500)
     if (!answers || answers.length === 0) {
-      return json({ error: "No self-answers found for this event" }, 404)
+      return json({ error: "No self-answers found for any players in this event" }, 404)
     }
 
     // ── 4. Build player profiles (group Q&A by player) ────────────────────────
@@ -126,6 +126,8 @@ Based on the personal answers each player gave about themselves, generate exactl
 Rules:
 - Each question must be about ONE specific player — use their name in the question text.
 - Spread questions across as many different players as possible.
+- Generate a MAXIMUM of 3 questions about any single player.
+- Generate up to 10 questions total, but generate fewer if needed to respect the 3-per-player limit.
 - NEVER generate a question where the person being asked IS the subject of the question (i.e. don't make someone answer a question about themselves).
 - Base every question directly on something a player actually said in their answers.
 - Wrong answer options should be plausible but clearly incorrect to someone who knows the person.
