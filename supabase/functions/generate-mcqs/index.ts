@@ -174,12 +174,12 @@ Return ONLY valid JSON — no markdown, no code fences, no extra text:
       "id": "q2",
       "type": "who-is-it",
       "text": "Who said they're a night owl because their best ideas hit at midnight?",
-      "aboutPlayer": "Sam",
+      "aboutPlayer": "Player2",
       "options": [
-        { "id": "a", "text": "Bruce 🦀", "isCorrect": false },
-        { "id": "b", "text": "Alex 🐙", "isCorrect": false },
-        { "id": "c", "text": "Sam 🦑", "isCorrect": true },
-        { "id": "d", "text": "Jordan 🐡", "isCorrect": false }
+        { "id": "a", "text": "Player1 🔴", "isCorrect": false },
+        { "id": "b", "text": "Player2 🟢", "isCorrect": false },
+        { "id": "c", "text": "Player3 🔵", "isCorrect": true },
+        { "id": "d", "text": "Player4 🟡", "isCorrect": false }
       ]
     }
   ]

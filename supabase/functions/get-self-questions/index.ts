@@ -196,13 +196,17 @@ Deno.serve(async (req: Request) => {
     ALL_QUESTIONS.filter((q) => q.id.startsWith("q") && !answeredQuestionTexts.includes(q.text))
   )
 
-  // Use event_id as seed so everyone in the same event gets the same p* question
-  const pickAllFresh = ALL_QUESTIONS.filter((q) => q.id.startsWith("p") && !answeredQuestionTexts.includes(q.text))
+  // Use event_id as seed so everyone in the same event gets the same p* question.
+  // IMPORTANT: seed-shuffle the full pool first, THEN filter answered ones — otherwise
+  // players with different answer histories get shuffled arrays of different lengths,
+  // making the seed useless and breaking consistency.
   const pickAll = ALL_QUESTIONS.filter((q) => q.id.startsWith("p"))
-  const pickSource = pickAllFresh.length >= 1 ? pickAllFresh : pickAll
-  const pickPool = eventId
-    ? seededShuffle(pickSource, uuidToSeed(eventId))
-    : shuffle(pickSource)
+  const pickShuffled = eventId
+    ? seededShuffle(pickAll, uuidToSeed(eventId))
+    : shuffle(pickAll)
+  const pickPool = pickShuffled.filter((q) => !answeredQuestionTexts.includes(q.text)).length >= 1
+    ? pickShuffled.filter((q) => !answeredQuestionTexts.includes(q.text))
+    : pickShuffled
 
   // Fall back to full pool if we've run out of fresh short questions
   const shorts = shortPool.length >= 2 ? shortPool : shuffle(ALL_QUESTIONS.filter((q) => q.id.startsWith("q")))

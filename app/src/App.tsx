@@ -99,14 +99,20 @@ export default function App() {
           const updated = payload.new as {
             is_started?: boolean;
             status?: string;
+            answered_player_ids?: string[];
           };
           if (updated.status === "completed") {
             setPhase("SUCCESS");
           }
           if (updated.status === "active" || updated.is_started === true) {
+            setEventEntry((prev) => prev ? { ...prev, isStarted: true } : prev);
             setPhase((prev) =>
-              prev === "WAITING" || prev === "SELF_QUESTIONS" ? "GAME" : prev
+              prev === "WAITING" || prev === "SELF_QUESTIONS" || prev === "DASHBOARD" ? "GAME" : prev
             );
+          }
+          if (updated.answered_player_ids !== undefined && playerIdRef.current) {
+            const answered = updated.answered_player_ids.includes(playerIdRef.current);
+            setEventEntry((prev) => prev ? { ...prev, alreadyAnswered: answered } : prev);
           }
         }
       )
