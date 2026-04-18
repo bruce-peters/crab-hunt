@@ -117,19 +117,21 @@ Deno.serve(async (req) => {
 
     const playerNames = Object.values(byPlayer).map(p => `${p.name} ${p.emoji}`)
 
-    const prompt = `You are crafting fun "get to know you" multiple-choice questions for a group scavenger hunt game.
+    const prompt = `You are crafting fun "get to know you" multiple-choice questions for a scavenger hunt game.
 
-Based on the personal answers each player gave about themselves, generate exactly 10 MCQ questions that help players learn interesting things about each other.
+Based on the answers each player gave about themselves, generate exactly 10 MCQ questions that help players learn fun, light-hearted things about each other.
+
+Keep questions easy, breezy, and fun — think "cats vs dogs", "controversial food opinion", "go-to karaoke song". Nothing too deep or serious. The goal is laughs and quick answers, not soul-searching.
 
 There are TWO question types you must mix together:
 
 TYPE 1 — "about-player": Ask something about a specific named player.
-  Example: "What is Alex's go-to comfort food?" with food options.
+  Example: "What is Alex's most controversial food opinion?" with answer options.
   - Use the player's name in the question text.
   - Options are content choices (not player names).
 
 TYPE 2 — "who-is-it": Ask which player matches a description, without naming them.
-  Example: "Who said their ideal Saturday is a spontaneous road trip with no plan?"
+  Example: "Who said their go-to karaoke song is Mr Brightside?"
   - Do NOT mention the player's name in the question text.
   - The 4 options are player names (all players in the game, with their emoji).
   - The correct option is the player whose answer inspired the question.

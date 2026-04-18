@@ -7,7 +7,11 @@ interface Question {
   placeholder: string
 }
 
+// Mix of two styles:
+// - Short answer (q*): question naturally gets a quick specific response ("mac and cheese", "Mr Brightside")
+// - Pick & explain (p*): phrased as a binary choice, user picks a side and explains in their own words
 const ALL_QUESTIONS: Question[] = [
+  // Short answer
   {
     id: "q1",
     text: "What's your go-to comfort food?",
@@ -15,123 +19,89 @@ const ALL_QUESTIONS: Question[] = [
   },
   {
     id: "q2",
-    text: "What's something most people don't know about you?",
-    placeholder: "A hidden talent, weird hobby, secret skill...",
-  },
-  {
-    id: "q3",
-    text: "What would your ideal Saturday look like?",
-    placeholder: "Be honest — couch, adventure, chaos, whatever...",
-  },
-  {
-    id: "q4",
-    text: "What's a hill you'll die on, no matter what?",
-    placeholder: "An opinion, preference, or belief you'll never budge on...",
-  },
-  {
-    id: "q5",
-    text: "What's the last thing you Googled that you're slightly embarrassed about?",
-    placeholder: "Be honest, we won't judge...",
-  },
-  {
-    id: "q6",
-    text: "If you had to eat one cuisine for the rest of your life, what would it be?",
-    placeholder: "Italian, Japanese, Mexican, Ethiopian...",
-  },
-  {
-    id: "q7",
-    text: "What's a skill you wish you had but have never learned?",
-    placeholder: "Instrument, language, sport, craft...",
-  },
-  {
-    id: "q8",
-    text: "What's the most spontaneous thing you've ever done?",
-    placeholder: "A trip, decision, purchase, or life choice...",
-  },
-  {
-    id: "q9",
     text: "What's your go-to karaoke song?",
     placeholder: "Even if you'd never actually do karaoke...",
   },
   {
-    id: "q10",
+    id: "q3",
+    text: "What's a movie or show everyone loves that you couldn't get into?",
+    placeholder: "No judgment... mostly.",
+  },
+  {
+    id: "q4",
     text: "What's the weirdest thing you believed as a kid?",
     placeholder: "Something you genuinely thought was true...",
   },
   {
-    id: "q11",
+    id: "q5",
+    text: "What's something you're weirdly good at?",
+    placeholder: "A random skill, party trick, or useless talent...",
+  },
+  {
+    id: "q6",
+    text: "What's your most-used emoji?",
+    placeholder: "e.g. 😭, 💀, 🫠... and why?",
+  },
+  {
+    id: "q7",
+    text: "What's a movie, book, or show you could quote on demand?",
+    placeholder: "Something so ingrained you could recite it in your sleep...",
+  },
+  {
+    id: "q8",
     text: "What's your most controversial food opinion?",
-    placeholder: "e.g. pineapple on pizza is fine, ketchup goes in the fridge...",
+    placeholder: "e.g. pineapple on pizza is fine, mayo is evil...",
   },
   {
-    id: "q12",
-    text: "If you had to live in a different decade, which would you pick and why?",
-    placeholder: "60s, 80s, 2050s... and what draws you there?",
-  },
-  {
-    id: "q13",
-    text: "What's a movie or show everyone loves that you just couldn't get into?",
-    placeholder: "No judgment... mostly.",
-  },
-  {
-    id: "q14",
-    text: "What's a small, weird thing that genuinely makes your day better?",
+    id: "q9",
+    text: "What's a small weird thing that genuinely makes your day better?",
     placeholder: "A smell, ritual, sound, or tiny habit...",
   },
   {
-    id: "q15",
-    text: "What's the most niche thing you're an expert in?",
-    placeholder: "Something obscure you know way too much about...",
+    id: "q10",
+    text: "What's the last thing that made you genuinely laugh out loud?",
+    placeholder: "A meme, moment, video, or real-life disaster...",
+  },
+  // Pick & explain
+  {
+    id: "p1",
+    text: "Cats or dogs? Why?",
+    placeholder: "Pick a side. No neutrals.",
   },
   {
-    id: "q16",
-    text: "You have one free day with zero obligations — what does it look like?",
-    placeholder: "Be specific. Morning to night.",
+    id: "p2",
+    text: "Sweet or savoury? What's your go-to?",
+    placeholder: "e.g. savoury, I could eat cheese forever",
   },
   {
-    id: "q17",
-    text: "What's a purchase under $20 that genuinely changed your life?",
-    placeholder: "A product, tool, snack, or experience...",
+    id: "p3",
+    text: "Morning person or night owl?",
+    placeholder: "e.g. night owl, best ideas hit at midnight",
   },
   {
-    id: "q18",
-    text: "What's your most used emoji and what does that say about you?",
-    placeholder: "Think about it...",
+    id: "p4",
+    text: "Beach or mountains?",
+    placeholder: "Pick one and sell it",
   },
   {
-    id: "q19",
-    text: "What's something you're irrationally afraid of?",
-    placeholder: "Not heights or spiders — something weird...",
+    id: "p5",
+    text: "Tea or coffee? How do you take it?",
+    placeholder: "e.g. oat flat white, always",
   },
   {
-    id: "q20",
-    text: "What would your friends say is your most annoying habit?",
-    placeholder: "Be honest.",
+    id: "p6",
+    text: "Texter or caller?",
+    placeholder: "e.g. texter, I panic when my phone rings",
   },
   {
-    id: "q21",
-    text: "What's the best piece of advice you've ever received?",
-    placeholder: "Who said it and did you actually follow it?",
+    id: "p7",
+    text: "Cook at home or eat out? What's your usual order?",
+    placeholder: "e.g. eat out, same Thai place every week",
   },
   {
-    id: "q22",
-    text: "What app do you spend the most time on that you'd be embarrassed to admit?",
-    placeholder: "Screen time doesn't lie...",
-  },
-  {
-    id: "q23",
-    text: "If you had to describe your vibe in three words, what would they be?",
-    placeholder: "Not what you aspire to — what you actually are.",
-  },
-  {
-    id: "q24",
-    text: "What's a recurring dream or nightmare you've had?",
-    placeholder: "Falling, flying, forgetting something...",
-  },
-  {
-    id: "q25",
-    text: "What's something on your bucket list that most people would find boring?",
-    placeholder: "Visiting a specific library, trying a certain food, etc.",
+    id: "p8",
+    text: "Spicy or mild? How far do you actually go?",
+    placeholder: "e.g. hot sauce on everything",
   },
 ]
 
@@ -161,7 +131,7 @@ Deno.serve(async (req: Request) => {
     const body = await req.json()
     playerId = body.player_id ?? null
   } catch {
-    // no body provided — return random questions without filtering
+    // no body — return random questions without filtering
   }
 
   let answeredQuestionTexts: string[] = []
@@ -182,11 +152,19 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  // Filter out already-answered questions; if all answered, use the full pool
-  const unanswered = ALL_QUESTIONS.filter((q) => !answeredQuestionTexts.includes(q.text))
-  const pool = unanswered.length > 0 ? unanswered : ALL_QUESTIONS
+  // Pick 2 short-answer questions (q*) and 1 pick-and-explain question (p*)
+  const shortPool = shuffle(
+    ALL_QUESTIONS.filter((q) => q.id.startsWith("q") && !answeredQuestionTexts.includes(q.text))
+  )
+  const pickPool = shuffle(
+    ALL_QUESTIONS.filter((q) => q.id.startsWith("p") && !answeredQuestionTexts.includes(q.text))
+  )
 
-  const picked = shuffle(pool).slice(0, 3)
+  // Fall back to full pool if we've run out of fresh questions
+  const shorts = shortPool.length >= 2 ? shortPool : shuffle(ALL_QUESTIONS.filter((q) => q.id.startsWith("q")))
+  const picks = pickPool.length >= 1 ? pickPool : shuffle(ALL_QUESTIONS.filter((q) => q.id.startsWith("p")))
+
+  const picked = [...shorts.slice(0, 2), ...picks.slice(0, 1)]
 
   return new Response(JSON.stringify(picked), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },

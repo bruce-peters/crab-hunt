@@ -18,12 +18,12 @@ Deno.serve(async (_req) => {
 
     const { data, error } = await supabase
       .from("events")
-      .select("number_based_question, number_based_question_answer, is_started")
+      .select("number_based_question, number_based_question_answer, status")
       .order("created_at", { ascending: false })
       .limit(1)
       .single()
 
-    if (error || !data || !data.is_started) {
+    if (error || !data || data.status === 'waiting') {
       return json({ number_based_question: "", number_based_question_answer: -1 })
     }
 

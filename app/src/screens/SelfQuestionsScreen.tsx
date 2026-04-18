@@ -19,10 +19,8 @@ export function SelfQuestionsScreen({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  // Fetch questions from edge function, then load any previously saved answers
   useEffect(() => {
     async function init() {
-      // 1. Get questions from edge function
       const { data: qs, error: fnErr } = await supabase.functions.invoke<
         SelfQuestion[]
       >("get-self-questions", { body: { player_id: user.id } });
@@ -33,7 +31,6 @@ export function SelfQuestionsScreen({
       }
       setQuestions(qs);
 
-      // 2. Pre-fill any answers this player already saved for this event
       const { data: saved } = await supabase
         .from("self_answers")
         .select("question, answer")
@@ -77,7 +74,6 @@ export function SelfQuestionsScreen({
       return;
     }
 
-    // Mark this player as having answered in the event
     const { data: event } = await supabase
       .from("events")
       .select("answered_player_ids")
@@ -134,7 +130,7 @@ export function SelfQuestionsScreen({
               </span>
             </label>
             <textarea
-              value={answers[i]}
+              value={answers[i] ?? ""}
               onChange={(e) => handleChange(i, e.target.value)}
               placeholder={q.placeholder}
               rows={2}
