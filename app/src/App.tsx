@@ -3,7 +3,6 @@ import type { User } from "@supabase/supabase-js";
 import type { GamePhase, AppUser } from "./types";
 import { supabase } from "./lib/supabase";
 import { clearMCQCache } from "./lib/utils";
-import { CLUE_TEXT } from "./data/mockData";
 import { LoginScreen } from "./screens/LoginScreen";
 import { DashboardScreen } from "./screens/DashboardScreen";
 import { SelfQuestionsScreen } from "./screens/SelfQuestionsScreen";
@@ -12,13 +11,6 @@ import { GameScreen } from "./screens/GameScreen";
 import { InstructionsScreen } from "./screens/InstructionsScreen";
 import { AdminDashboard } from "./screens/AdminDashboard";
 import { SuccessScreen } from "./screens/SuccessScreen";
-
-function initDisplayedClue(clue: string): string {
-  return clue
-    .split("")
-    .map((c) => (c === " " ? " " : "_"))
-    .join("");
-}
 
 export default function App() {
   const [phase, setPhase] = useState<GamePhase>("LOGIN");
@@ -105,14 +97,27 @@ export default function App() {
             setPhase("SUCCESS");
           }
           if (updated.status === "active" || updated.is_started === true) {
-            setEventEntry((prev) => prev ? { ...prev, isStarted: true } : prev);
+            setEventEntry((prev) =>
+              prev ? { ...prev, isStarted: true } : prev
+            );
             setPhase((prev) =>
-              prev === "WAITING" || prev === "SELF_QUESTIONS" || prev === "DASHBOARD" ? "GAME" : prev
+              prev === "WAITING" ||
+              prev === "SELF_QUESTIONS" ||
+              prev === "DASHBOARD"
+                ? "GAME"
+                : prev
             );
           }
-          if (updated.answered_player_ids !== undefined && playerIdRef.current) {
-            const answered = updated.answered_player_ids.includes(playerIdRef.current);
-            setEventEntry((prev) => prev ? { ...prev, alreadyAnswered: answered } : prev);
+          if (
+            updated.answered_player_ids !== undefined &&
+            playerIdRef.current
+          ) {
+            const answered = updated.answered_player_ids.includes(
+              playerIdRef.current
+            );
+            setEventEntry((prev) =>
+              prev ? { ...prev, alreadyAnswered: answered } : prev
+            );
           }
         }
       )
@@ -122,7 +127,7 @@ export default function App() {
     };
   }, [eventId]);
 
-  // Subscribe to new events being inserted — so all active players get moved to the newest event
+  // Subscribe to new events being inserted — update the dashboard so the player can choose to enter
   useEffect(() => {
     const channel = supabase
       .channel("global-new-events")
@@ -133,20 +138,18 @@ export default function App() {
           const newEventId = (payload.new as { id: string }).id;
           const pid = playerIdRef.current;
           if (!pid) return;
-          // Join the new event then reload so all state is fresh
+          // Fetch the new event and update dashboard state without auto-joining
           const { data: ev } = await supabase
             .from("events")
-            .select("id, player_ids")
+            .select("id, answered_player_ids, is_started")
             .eq("id", newEventId)
             .single();
           if (!ev) return;
-          if (!(ev.player_ids ?? []).includes(pid)) {
-            await supabase
-              .from("events")
-              .update({ player_ids: [...(ev.player_ids ?? []), pid] })
-              .eq("id", newEventId);
-          }
-          window.location.reload();
+          setEventId(newEventId);
+          setEventEntry({
+            alreadyAnswered: (ev.answered_player_ids ?? []).includes(pid),
+            isStarted: ev.is_started ?? false,
+          });
         }
       )
       .subscribe();
@@ -189,7 +192,8 @@ export default function App() {
     alreadyAnswered: boolean;
     isStarted: boolean;
   } | null> {
-    // Always use the globally most recent event so all players are on the same session
+    // Always use the globally most recent event so all players see the same session.
+    // Read-only — joining (player_ids) happens only when the player clicks "Enter event".
     const { data: latest } = await supabase
       .from("events")
       .select("id, player_ids, answered_player_ids, is_started")
@@ -197,43 +201,29 @@ export default function App() {
       .limit(1)
       .single();
 
-    let event = latest;
+    if (!latest) return null;
 
-    if (!event) {
-      // No events at all — create the first one
-      const { data: created } = await supabase
-        .from("events")
-        .insert({
-          player_ids: [playerId],
-          daily_clue: CLUE_TEXT,
-          displayed_clue: initDisplayedClue(CLUE_TEXT),
-          created_at: new Date().toISOString(),
-        })
-        .select("id, player_ids, answered_player_ids, is_started")
-        .single();
-      event = created;
-    } else if (!(event.player_ids ?? []).includes(playerId)) {
-      // Join the latest event if not already in it
-      const updatedIds = [...(event.player_ids ?? []), playerId];
-      await supabase
-        .from("events")
-        .update({ player_ids: updatedIds })
-        .eq("id", event.id);
-      event = { ...event, player_ids: updatedIds };
-    }
-
-    if (!event) return null;
-    const alreadyAnswered = (event.answered_player_ids ?? []).includes(
-      playerId
-    );
+    const alreadyAnswered = (latest.answered_player_ids ?? []).includes(playerId);
     return {
-      eventId: event.id,
+      eventId: latest.id,
       alreadyAnswered,
-      isStarted: event.is_started ?? false,
+      isStarted: latest.is_started ?? false,
     };
   }
-  function handleEnterEvent() {
-    if (!eventEntry) return;
+  async function handleEnterEvent() {
+    if (!eventEntry || !eventId || !user) return;
+    // Join the event (add to player_ids) now that the player has chosen to enter
+    const { data: ev } = await supabase
+      .from("events")
+      .select("player_ids")
+      .eq("id", eventId)
+      .single();
+    if (ev && !(ev.player_ids ?? []).includes(user.id)) {
+      await supabase
+        .from("events")
+        .update({ player_ids: [...(ev.player_ids ?? []), user.id] })
+        .eq("id", eventId);
+    }
     if (eventEntry.isStarted) {
       setPhase("GAME");
     } else {

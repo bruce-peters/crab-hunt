@@ -217,7 +217,8 @@ export function GameScreen({
           });
         })
         .catch((err) => {
-          if (genRafRef.current !== null) cancelAnimationFrame(genRafRef.current);
+          if (genRafRef.current !== null)
+            cancelAnimationFrame(genRafRef.current);
           // On error, just cycle back to the start of the existing questions
           setQuestionIndex(0);
           setLoadingMCQs(false);
