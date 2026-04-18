@@ -14,8 +14,8 @@ const CORS = {
  *
  * 1. Fetches all players in the event and their self_answers.
  * 2. Sends everything to GPT-4o-mini, asking it to find group similarities and
- *    generate one number-based question + answer (e.g. "How many people like pineapple on pizza?" → 3).
- * 3. Stores the result in events.number_based_question and events.number_based_question_answer.
+ *    generate TWO number-based questions + answers.
+ * 3. Stores the result in events.number_based_question as JSON: {questions:[{q,a},{q,a}]}.
  */
 
 Deno.serve(async (req) => {
@@ -116,14 +116,14 @@ Deno.serve(async (req) => {
     const openaiKey = Deno.env.get("OPENAI_API_KEY")
     if (!openaiKey) return json({ error: "OPENAI_API_KEY not set" }, 500)
 
-    const prompt = `You are designing the final clue question for a group scavenger hunt game.
+    const prompt = `You are designing the final clue questions for a group scavenger hunt game.
 
 The group has ${players.length} players: ${playerNames}.
 
 Each player answered personal "get to know you" questions (drawn from all their previous sessions). Your job is to:
 1. Study all the answers and find interesting similarities or patterns across the group (e.g. shared hobbies, foods, opinions, habits, places).
-2. Pick the most fun or surprising similarity and craft ONE number-based question about it.
-3. The answer must be a whole number between 1 and ${players.length}.
+2. Pick the TWO most fun or surprising similarities and craft TWO different number-based questions about them.
+3. Each answer must be a whole number between 1 and ${players.length}.
 
 Example questions (do NOT copy these, invent your own based on the actual answers):
 - "How many people in the group have visited more than 3 countries?"
@@ -131,8 +131,9 @@ Example questions (do NOT copy these, invent your own based on the actual answer
 - "How many people in the group have a pet at home?"
 
 Rules:
-- The question must be answerable purely from the answers given below — do NOT invent facts.
-- The answer MUST be a whole number.
+- Each question must be answerable purely from the answers given below — do NOT invent facts.
+- Each answer MUST be a whole number.
+- The two questions must be about DIFFERENT topics.
 - Keep tone fun and light-hearted.
 
 Player profiles:
@@ -140,8 +141,10 @@ ${playerProfiles}
 
 Return ONLY valid JSON with no markdown or code fences:
 {
-  "question": "How many people in the group ...?",
-  "answer": 3
+  "questions": [
+    {"q": "How many people in the group ...?", "a": 3},
+    {"q": "How many people in the group ...?", "a": 2}
+  ]
 }`
 
     const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -165,11 +168,10 @@ Return ONLY valid JSON with no markdown or code fences:
 
     const aiData = await aiRes.json()
     const result = JSON.parse(aiData.choices[0].message.content) as {
-      question: string
-      answer: number
+      questions: { q: string; a: number }[]
     }
 
-    if (!result.question || result.answer === undefined) {
+    if (!Array.isArray(result.questions) || result.questions.length < 2) {
       return json({ error: "GPT returned unexpected structure", raw: result }, 502)
     }
 
@@ -177,8 +179,7 @@ Return ONLY valid JSON with no markdown or code fences:
     const { error: updateError } = await supabase
       .from("events")
       .update({
-        number_based_question: result.question,
-        number_based_question_answer: String(result.answer),
+        number_based_question: result,
       })
       .eq("id", event_id)
 
@@ -188,8 +189,7 @@ Return ONLY valid JSON with no markdown or code fences:
 
     return json({
       event_id,
-      question: result.question,
-      answer: result.answer,
+      questions: result.questions,
     })
   } catch (e) {
     return json({ error: String(e) }, 500)
