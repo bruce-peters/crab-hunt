@@ -103,10 +103,16 @@ export function GameScreen({
 
   useEffect(() => {
     generateMCQs(user.id)
-      .then(({ questions }) => setQuestions(questions))
+      .then(({ questions }) => {
+        // Filter out questions about the current player — you shouldn't get quizzed about yourself
+        const filtered = questions.filter(
+          (q) => q.aboutPlayer.toLowerCase() !== user.name.toLowerCase()
+        );
+        setQuestions(filtered);
+      })
       .catch((err) => setMcqError(err.message ?? "Failed to load questions"))
       .finally(() => setLoadingMCQs(false));
-  }, [user.id]);
+  }, [user.id, user.name]);
 
   // Cycle questions infinitely from the pool
   const question =

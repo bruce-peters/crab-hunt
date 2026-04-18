@@ -126,6 +126,7 @@ Based on the personal answers each player gave about themselves, generate exactl
 Rules:
 - Each question must be about ONE specific player — use their name in the question text.
 - Spread questions across as many different players as possible.
+- NEVER generate a question where the person being asked IS the subject of the question (i.e. don't make someone answer a question about themselves).
 - Base every question directly on something a player actually said in their answers.
 - Wrong answer options should be plausible but clearly incorrect to someone who knows the person.
 - Keep tone fun, warm and light-hearted.
