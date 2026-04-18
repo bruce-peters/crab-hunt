@@ -11,6 +11,7 @@ import { WaitingScreen } from "./screens/WaitingScreen";
 import { GameScreen } from "./screens/GameScreen";
 import { InstructionsScreen } from "./screens/InstructionsScreen";
 import { AdminDashboard } from "./screens/AdminDashboard";
+import { SuccessScreen } from "./screens/SuccessScreen";
 
 function initDisplayedClue(clue: string): string {
   return clue
@@ -65,9 +66,20 @@ export default function App() {
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "events" },
         (payload) => {
-          const updated = payload.new as { is_started?: boolean };
+          const updated = payload.new as {
+            is_started?: boolean;
+            status?: string;
+          };
           if (updated.is_started === false && playerIdRef.current) {
             clearMCQCache(playerIdRef.current);
+          }
+          if (updated.status === "completed") {
+            setPhase("SUCCESS");
+          }
+          if (updated.status === "active" || updated.is_started === true) {
+            setPhase((prev) =>
+              prev === "WAITING" || prev === "SELF_QUESTIONS" ? "GAME" : prev
+            );
           }
         }
       )
@@ -266,6 +278,7 @@ export default function App() {
       {phase === "INSTRUCTIONS" && (
         <InstructionsScreen onBackToGame={() => setPhase("GAME")} />
       )}
+      {phase === "SUCCESS" && user && <SuccessScreen user={user} />}
     </div>
   );
 }

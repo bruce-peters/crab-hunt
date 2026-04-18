@@ -1,7 +1,7 @@
-export type GamePhase = 'LOGIN' | 'DASHBOARD' | 'SELF_QUESTIONS' | 'WAITING' | 'GAME' | 'INSTRUCTIONS'
+export type GamePhase = 'LOGIN' | 'DASHBOARD' | 'SELF_QUESTIONS' | 'WAITING' | 'GAME' | 'INSTRUCTIONS' | 'SUCCESS'
 
 // DB game state (from Supabase realtime)
-export type DbGameStatus = 'waiting' | 'active' | 'finished'
+export type DbGameStatus = 'waiting' | 'active' | 'finished' | 'completed'
 
 export interface AppUser {
   id: string
