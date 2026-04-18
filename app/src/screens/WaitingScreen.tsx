@@ -63,13 +63,14 @@ export function WaitingScreen({
           filter: `id=eq.${eventId}`,
         },
         (payload) => {
-          const { player_ids, answered_player_ids, is_started } =
+          const { player_ids, answered_player_ids, is_started, status } =
             payload.new as {
               player_ids: string[];
               answered_player_ids: string[];
               is_started: boolean;
+              status: string;
             };
-          if (is_started) {
+          if (is_started || status === "active") {
             onGameStart();
             return;
           }

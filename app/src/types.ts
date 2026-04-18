@@ -7,6 +7,7 @@ export interface AppUser {
   id: string
   name: string
   emoji: string
+  isAdmin: boolean
 }
 
 export interface Player {

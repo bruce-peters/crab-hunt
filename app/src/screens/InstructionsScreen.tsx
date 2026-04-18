@@ -1,7 +1,5 @@
-import { CLUE_TEXT } from '../data/mockData'
-
 interface InstructionsScreenProps {
-  onBackToGame: () => void
+  onBackToGame: () => void;
 }
 
 export function InstructionsScreen({ onBackToGame }: InstructionsScreenProps) {
@@ -23,33 +21,29 @@ export function InstructionsScreen({ onBackToGame }: InstructionsScreenProps) {
           You cracked it.
         </h1>
         <p className="text-white/40 text-sm leading-relaxed">
-          Head to the location, solve the final puzzle on the box, and claim your prize.
-        </p>
-      </div>
-
-      {/* Clue card */}
-      <div className="mb-6 p-5 rounded-2xl border border-white/25 bg-white/5">
-        <p className="text-xs font-mono text-white/30 tracking-widest uppercase mb-3">
-          Your clue
-        </p>
-        <p className="font-mono text-2xl font-bold text-white tracking-widest">
-          {CLUE_TEXT}
+          Head to the location, solve the final puzzle on the box, and claim
+          your prize.
         </p>
       </div>
 
       {/* Steps */}
       <div className="flex flex-col gap-3 mb-8">
         {[
-          { step: '01', text: 'Head to the location described in the clue.' },
-          { step: '02', text: 'Find the physical box — first team there wins.' },
-          { step: '03', text: 'Solve the final puzzle on the box to open it.' },
-          { step: '04', text: 'Claim your prize. 🎉' },
+          { step: "01", text: "Head to the location described in the clue." },
+          {
+            step: "02",
+            text: "Find the physical box — first team there wins.",
+          },
+          { step: "03", text: "Solve the final puzzle on the box to open it." },
+          { step: "04", text: "Claim your prize. 🎉" },
         ].map(({ step, text }) => (
           <div
             key={step}
             className="flex items-start gap-4 p-4 rounded-2xl border border-white/10 bg-white/[0.02]"
           >
-            <span className="font-mono text-white/25 text-xs flex-shrink-0 mt-0.5">{step}</span>
+            <span className="font-mono text-white/25 text-xs flex-shrink-0 mt-0.5">
+              {step}
+            </span>
             <p className="text-white/70 text-sm leading-relaxed">{text}</p>
           </div>
         ))}
@@ -75,8 +69,13 @@ export function InstructionsScreen({ onBackToGame }: InstructionsScreenProps) {
       </button>
 
       <p className="text-center text-white/10 text-xs font-mono mt-6">
-        Crab Hunt · {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+        Crab Hunt ·{" "}
+        {new Date().toLocaleDateString("en-US", {
+          month: "long",
+          day: "numeric",
+          year: "numeric",
+        })}
       </p>
     </div>
-  )
+  );
 }

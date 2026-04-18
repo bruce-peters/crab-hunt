@@ -1,8 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { User } from "@supabase/supabase-js";
 import type { GamePhase, AppUser } from "./types";
 import { supabase } from "./lib/supabase";
 import { CLUE_TEXT } from "./data/mockData";
+import { LoginScreen } from "./screens/LoginScreen";
+import { SelfQuestionsScreen } from "./screens/SelfQuestionsScreen";
+import { WaitingScreen } from "./screens/WaitingScreen";
+import { GameScreen } from "./screens/GameScreen";
+import { InstructionsScreen } from "./screens/InstructionsScreen";
+import { AdminDashboard } from "./screens/AdminDashboard";
 
 function initDisplayedClue(clue: string): string {
   return clue
@@ -10,17 +16,16 @@ function initDisplayedClue(clue: string): string {
     .map((c) => (c === " " ? " " : "_"))
     .join("");
 }
-import { LoginScreen } from "./screens/LoginScreen";
-import { SelfQuestionsScreen } from "./screens/SelfQuestionsScreen";
-import { WaitingScreen } from "./screens/WaitingScreen";
-import { GameScreen } from "./screens/GameScreen";
-import { InstructionsScreen } from "./screens/InstructionsScreen";
 
 export default function App() {
   const [phase, setPhase] = useState<GamePhase>("LOGIN");
   const [user, setUser] = useState<AppUser | null>(null);
   const [eventId, setEventId] = useState<string | null>(null);
   const [booting, setBooting] = useState(true);
+  const [showAdmin, setShowAdmin] = useState(false);
+
+  // Keep a ref to the current player id so realtime callbacks can read it
+  const playerIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -46,15 +51,55 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Subscribe to new events being inserted — so all active players get moved to the newest event
+  useEffect(() => {
+    const channel = supabase
+      .channel("global-new-events")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "events" },
+        async (payload) => {
+          const newEventId = (payload.new as { id: string }).id;
+          const pid = playerIdRef.current;
+          if (!pid) return;
+          // Join the new event then reload so all state is fresh
+          const { data: ev } = await supabase
+            .from("events")
+            .select("id, player_ids")
+            .eq("id", newEventId)
+            .single();
+          if (!ev) return;
+          if (!(ev.player_ids ?? []).includes(pid)) {
+            await supabase
+              .from("events")
+              .update({ player_ids: [...(ev.player_ids ?? []), pid] })
+              .eq("id", newEventId);
+          }
+          window.location.reload();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   async function loadPlayer(authUser: User) {
     const { data: player } = await supabase
       .from("players")
-      .select("id, name, emoji")
+      .select("id, name, emoji, is_admin")
       .eq("user_id", authUser.id)
       .single();
 
     if (player) {
-      setUser({ id: player.id, name: player.name, emoji: player.emoji });
+      playerIdRef.current = player.id;
+      setUser({
+        id: player.id,
+        name: player.name,
+        emoji: player.emoji,
+        isAdmin: player.is_admin ?? false,
+      });
       const result = await loadOrCreateEvent(player.id);
       if (result) {
         setEventId(result.eventId);
@@ -68,52 +113,42 @@ export default function App() {
     setBooting(false);
   }
 
-  async function loadOrCreateEvent(
-    playerId: string
-  ): Promise<{
+  async function loadOrCreateEvent(playerId: string): Promise<{
     eventId: string;
     alreadyAnswered: boolean;
     isStarted: boolean;
   } | null> {
-    // Try to find the most recent event that includes this player
-    let { data: event } = await supabase
+    // Always use the globally most recent event so all players are on the same session
+    const { data: latest } = await supabase
       .from("events")
-      .select("id, answered_player_ids, is_started")
-      .contains("player_ids", [playerId])
+      .select("id, player_ids, answered_player_ids, is_started")
       .order("created_at", { ascending: false })
       .limit(1)
       .single();
 
-    if (!event) {
-      // No event found for this player — find the latest event overall or create one
-      const { data: latest } = await supabase
-        .from("events")
-        .select("id, player_ids")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
+    let event = latest;
 
-      if (latest) {
-        // Join the existing event
-        const updatedIds = [...(latest.player_ids ?? []), playerId];
-        await supabase
-          .from("events")
-          .update({ player_ids: updatedIds })
-          .eq("id", latest.id);
-        event = { id: latest.id, answered_player_ids: [], is_started: false };
-      } else {
-        // Create the first event of the day
-        const { data: created } = await supabase
-          .from("events")
-          .insert({
-            player_ids: [playerId],
-            daily_clue: CLUE_TEXT,
-            displayed_clue: initDisplayedClue(CLUE_TEXT),
-          })
-          .select("id, answered_player_ids, is_started")
-          .single();
-        event = created;
-      }
+    if (!event) {
+      // No events at all — create the first one
+      const { data: created } = await supabase
+        .from("events")
+        .insert({
+          player_ids: [playerId],
+          daily_clue: CLUE_TEXT,
+          displayed_clue: initDisplayedClue(CLUE_TEXT),
+          created_at: new Date().toISOString(),
+        })
+        .select("id, player_ids, answered_player_ids, is_started")
+        .single();
+      event = created;
+    } else if (!(event.player_ids ?? []).includes(playerId)) {
+      // Join the latest event if not already in it
+      const updatedIds = [...(event.player_ids ?? []), playerId];
+      await supabase
+        .from("events")
+        .update({ player_ids: updatedIds })
+        .eq("id", event.id);
+      event = { ...event, player_ids: updatedIds };
     }
 
     if (!event) return null;
@@ -144,6 +179,25 @@ export default function App() {
 
   return (
     <div className="max-w-md mx-auto min-h-dvh">
+      {/* Floating admin button */}
+      {user.isAdmin && (
+        <button
+          onClick={() => setShowAdmin(true)}
+          className="fixed top-4 right-4 z-40 w-9 h-9 flex items-center justify-center rounded-full bg-white/8 border border-white/15 text-white/50 hover:bg-white/15 hover:border-white/30 hover:text-white/80 transition-all active:scale-95 text-base"
+          title="Admin dashboard"
+        >
+          ⚙
+        </button>
+      )}
+
+      {/* Admin dashboard overlay */}
+      {showAdmin && (
+        <AdminDashboard
+          currentEventId={eventId}
+          onClose={() => setShowAdmin(false)}
+        />
+      )}
+
       {phase === "SELF_QUESTIONS" && (
         <SelfQuestionsScreen
           user={user}

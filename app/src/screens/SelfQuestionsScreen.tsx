@@ -25,7 +25,7 @@ export function SelfQuestionsScreen({
       // 1. Get questions from edge function
       const { data: qs, error: fnErr } = await supabase.functions.invoke<
         SelfQuestion[]
-      >("get-self-questions");
+      >("get-self-questions", { body: { player_id: user.id } });
       if (fnErr || !qs) {
         setError("Could not load questions. Please refresh.");
         setLoading(false);

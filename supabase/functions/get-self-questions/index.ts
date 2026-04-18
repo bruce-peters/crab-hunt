@@ -1,4 +1,5 @@
 import "@supabase/functions-js/edge-runtime.d.ts"
+import { createClient } from "jsr:@supabase/supabase-js@2"
 
 interface Question {
   id: string
@@ -154,7 +155,38 @@ Deno.serve(async (req: Request) => {
     return new Response("ok", { headers: corsHeaders })
   }
 
-  const picked = shuffle(ALL_QUESTIONS).slice(0, 3)
+  let playerId: string | null = null
+
+  try {
+    const body = await req.json()
+    playerId = body.player_id ?? null
+  } catch {
+    // no body provided — return random questions without filtering
+  }
+
+  let answeredQuestionTexts: string[] = []
+
+  if (playerId) {
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    )
+
+    const { data } = await supabase
+      .from("self_answers")
+      .select("question")
+      .eq("player_id", playerId)
+
+    if (data && data.length > 0) {
+      answeredQuestionTexts = data.map((row: { question: string }) => row.question)
+    }
+  }
+
+  // Filter out already-answered questions; if all answered, use the full pool
+  const unanswered = ALL_QUESTIONS.filter((q) => !answeredQuestionTexts.includes(q.text))
+  const pool = unanswered.length > 0 ? unanswered : ALL_QUESTIONS
+
+  const picked = shuffle(pool).slice(0, 3)
 
   return new Response(JSON.stringify(picked), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
