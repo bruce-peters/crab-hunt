@@ -15,6 +15,35 @@ function formatDate(iso: string): string {
   });
 }
 
+function statusBadge(status: string) {
+  switch (status) {
+    case "completed":
+      return (
+        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full border border-green-400/30 text-green-400/70 shrink-0">
+          solved
+        </span>
+      );
+    case "active":
+      return (
+        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full border border-yellow-400/30 text-yellow-400/70 shrink-0">
+          active
+        </span>
+      );
+    case "waiting":
+      return (
+        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full border border-white/15 text-white/30 shrink-0">
+          waiting
+        </span>
+      );
+    default:
+      return (
+        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full border border-white/10 text-white/20 shrink-0">
+          {status}
+        </span>
+      );
+  }
+}
+
 export function DashboardScreen({
   user,
   currentEventId,
@@ -151,6 +180,7 @@ export function DashboardScreen({
                 <span className="text-xs text-white/55 truncate flex-1 min-w-0 font-mono tracking-wider">
                   {ev.clueText ?? "—"}
                 </span>
+                {statusBadge(ev.status)}
               </div>
             ))}
           </div>

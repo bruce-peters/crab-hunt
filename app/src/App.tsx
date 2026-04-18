@@ -305,7 +305,12 @@ export default function App() {
       {phase === "INSTRUCTIONS" && (
         <InstructionsScreen onBackToGame={() => setPhase("GAME")} />
       )}
-      {phase === "SUCCESS" && user && <SuccessScreen user={user} />}
+      {phase === "SUCCESS" && user && (
+        <SuccessScreen
+          user={user}
+          onBackToDashboard={() => setPhase("DASHBOARD")}
+        />
+      )}
     </div>
   );
 }

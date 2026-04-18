@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 
 interface SuccessScreenProps {
   user: { name: string; emoji: string };
+  onBackToDashboard: () => void;
 }
 
 // A lightweight canvas-based confetti burst
@@ -85,7 +86,7 @@ function launchConfetti(canvas: HTMLCanvasElement) {
   return () => cancelAnimationFrame(raf);
 }
 
-export function SuccessScreen({ user }: SuccessScreenProps) {
+export function SuccessScreen({ user, onBackToDashboard }: SuccessScreenProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -115,7 +116,7 @@ export function SuccessScreen({ user }: SuccessScreenProps) {
       />
 
       {/* Content */}
-      <div className="relative z-20 flex flex-col items-center text-center">
+      <div className="relative z-20 flex flex-col items-center text-center flex-1 justify-center">
         <div className="text-7xl mb-6 animate-bounce">🦀</div>
 
         <h1 className="text-4xl font-bold text-white mb-3 leading-tight">
@@ -139,6 +140,16 @@ export function SuccessScreen({ user }: SuccessScreenProps) {
           <span className="text-4xl">{user.emoji}</span>
           <span className="text-white/40 text-sm font-mono">{user.name}</span>
         </div>
+      </div>
+
+      {/* Back to dashboard */}
+      <div className="relative z-20 w-full pb-10 pt-6">
+        <button
+          onClick={onBackToDashboard}
+          className="w-full py-3 rounded-2xl border border-white/15 text-white/35 text-sm font-medium active:scale-[0.98] transition-all hover:border-white/30 hover:text-white/55"
+        >
+          ← Back to dashboard
+        </button>
       </div>
     </div>
   );
