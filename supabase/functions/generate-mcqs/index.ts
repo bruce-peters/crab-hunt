@@ -27,6 +27,7 @@ interface MCQQuestion {
   id: string
   text: string
   aboutPlayer: string
+  type: 'about-player' | 'who-is-it'
   options: QuestionOption[]
 }
 
@@ -50,7 +51,7 @@ Deno.serve(async (req) => {
     // ── 1. Get the current (most recently created) event ──────────────────────
     const { data: event, error: eventError } = await supabase
       .from("events")
-      .select("id, player_ids, cached_mcqs")
+      .select("id, player_ids")
       .order("created_at", { ascending: false })
       .limit(1)
       .single()
@@ -64,11 +65,6 @@ Deno.serve(async (req) => {
 
     if (playerIds.length === 0) {
       return json({ error: "Event has no players" }, 404)
-    }
-
-    // ── 2a. Return cached questions if available ───────────────────────────────
-    if (event.cached_mcqs && Array.isArray(event.cached_mcqs) && event.cached_mcqs.length > 0) {
-      return json({ event_id: eventId, questions: event.cached_mcqs })
     }
 
     // ── 2. Fetch all players in the event ─────────────────────────────────────
@@ -119,19 +115,36 @@ Deno.serve(async (req) => {
     const openaiKey = Deno.env.get("OPENAI_API_KEY")
     if (!openaiKey) return json({ error: "OPENAI_API_KEY not set" }, 500)
 
+    const playerNames = Object.values(byPlayer).map(p => `${p.name} ${p.emoji}`)
+
     const prompt = `You are crafting fun "get to know you" multiple-choice questions for a group scavenger hunt game.
 
 Based on the personal answers each player gave about themselves, generate exactly 10 MCQ questions that help players learn interesting things about each other.
 
-Rules:
-- Each question must be about ONE specific player — use their name in the question text.
+There are TWO question types you must mix together:
+
+TYPE 1 — "about-player": Ask something about a specific named player.
+  Example: "What is Alex's go-to comfort food?" with food options.
+  - Use the player's name in the question text.
+  - Options are content choices (not player names).
+
+TYPE 2 — "who-is-it": Ask which player matches a description, without naming them.
+  Example: "Who said their ideal Saturday is a spontaneous road trip with no plan?"
+  - Do NOT mention the player's name in the question text.
+  - The 4 options are player names (all players in the game, with their emoji).
+  - The correct option is the player whose answer inspired the question.
+  - "aboutPlayer" should still be set to the correct player's name (without emoji).
+
+Rules (both types):
+- Generate exactly 5 "about-player" questions and 5 "who-is-it" questions.
 - Spread questions across as many different players as possible.
-- Generate a MAXIMUM of 3 questions about any single player.
-- Generate up to 10 questions total, but generate fewer if needed to respect the 3-per-player limit.
-- NEVER generate a question where the person being asked IS the subject of the question (i.e. don't make someone answer a question about themselves).
-- Base every question directly on something a player actually said in their answers.
-- Wrong answer options should be plausible but clearly incorrect to someone who knows the person.
-- Keep tone fun, warm and light-hearted.
+- Generate a MAXIMUM of 3 questions about any single player (across both types combined).
+- NEVER generate a question where the person being asked IS the subject (set "aboutPlayer" correctly so the app can filter).
+- Base every question on something a player actually said in their answers.
+- Wrong answer options should be plausible but clearly incorrect.
+- Keep tone fun, warm, and light-hearted.
+
+Players in this game (for "who-is-it" option lists): ${playerNames.join(', ')}
 
 Player profiles:
 ${playerProfiles}
@@ -141,6 +154,7 @@ Return ONLY valid JSON — no markdown, no code fences, no extra text:
   "questions": [
     {
       "id": "q1",
+      "type": "about-player",
       "text": "question text here",
       "aboutPlayer": "Player Name",
       "options": [
@@ -148,6 +162,18 @@ Return ONLY valid JSON — no markdown, no code fences, no extra text:
         { "id": "b", "text": "option text", "isCorrect": true },
         { "id": "c", "text": "option text", "isCorrect": false },
         { "id": "d", "text": "option text", "isCorrect": false }
+      ]
+    },
+    {
+      "id": "q2",
+      "type": "who-is-it",
+      "text": "Who said their ideal Saturday is a spontaneous road trip with no plan?",
+      "aboutPlayer": "Sam",
+      "options": [
+        { "id": "a", "text": "Bruce 🦀", "isCorrect": false },
+        { "id": "b", "text": "Alex 🐙", "isCorrect": false },
+        { "id": "c", "text": "Sam 🦑", "isCorrect": true },
+        { "id": "d", "text": "Jordan 🐡", "isCorrect": false }
       ]
     }
   ]
@@ -173,15 +199,48 @@ Return ONLY valid JSON — no markdown, no code fences, no extra text:
     }
 
     const aiData = await aiRes.json()
-    const content = JSON.parse(aiData.choices[0].message.content) as { questions: MCQQuestion[] }
+    const raw = JSON.parse(aiData.choices[0].message.content) as { questions: MCQQuestion[] }
 
-    // ── 6. Persist the generated questions so future calls use the cache ───────
-    await supabase
-      .from("events")
-      .update({ cached_mcqs: content.questions })
-      .eq("id", eventId)
+    console.log("[generate-mcqs] GPT raw question types:", raw.questions?.map(q => ({ id: q.id, type: q.type, aboutPlayer: q.aboutPlayer, optionTexts: q.options?.map(o => o.text) })))
 
-    return json({ event_id: eventId, ...content })
+    // Normalize type field.
+    // A question is "who-is-it" if GPT set that type AND at least some of its options resemble
+    // player names. We use a lenient check (any option contains a known player's first name)
+    // rather than requiring exact full-string matches, because GPT may vary spacing/emoji format.
+    const playerFirstNames = new Set(playerNames.map(n => n.split(" ")[0].toLowerCase()))
+    const normalized: MCQQuestion[] = raw.questions.map(q => {
+      const optionTexts = q.options.map(o => o.text.toLowerCase())
+      const optionsLookLikePlayerNames = optionTexts.some(t =>
+        playerFirstNames.has(t.split(" ")[0])
+      )
+      return {
+        ...q,
+        type: q.type === 'who-is-it' && optionsLookLikePlayerNames ? 'who-is-it' : 'about-player',
+      }
+    })
+
+    console.log("[generate-mcqs] Normalized types:", normalized.map(q => ({ id: q.id, type: q.type })))
+
+    // Enforce max 3 questions per player — only applies to 'about-player' type.
+    // 'who-is-it' questions are always kept regardless of how many reference the same player.
+    const countByPlayer: Record<string, number> = {}
+    const questions = normalized.filter(q => {
+      if (q.type === 'who-is-it') return true
+      const key = q.aboutPlayer.toLowerCase()
+      countByPlayer[key] = (countByPlayer[key] ?? 0) + 1
+      return countByPlayer[key] <= 3
+    })
+
+    return json({
+      event_id: eventId,
+      questions,
+      _debug: {
+        rawTypes: raw.questions?.map(q => ({ id: q.id, type: q.type, aboutPlayer: q.aboutPlayer, options: q.options?.map(o => o.text) })),
+        normalizedTypes: normalized.map(q => ({ id: q.id, type: q.type, aboutPlayer: q.aboutPlayer })),
+        finalQuestions: questions.map(q => ({ id: q.id, type: q.type, aboutPlayer: q.aboutPlayer })),
+        playerNames,
+      }
+    })
   } catch (e) {
     return json({ error: String(e) }, 500)
   }

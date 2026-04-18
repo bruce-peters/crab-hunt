@@ -2,8 +2,10 @@ import { useState, useEffect, useRef } from "react";
 import type { User } from "@supabase/supabase-js";
 import type { GamePhase, AppUser } from "./types";
 import { supabase } from "./lib/supabase";
+import { clearMCQCache } from "./lib/utils";
 import { CLUE_TEXT } from "./data/mockData";
 import { LoginScreen } from "./screens/LoginScreen";
+import { DashboardScreen } from "./screens/DashboardScreen";
 import { SelfQuestionsScreen } from "./screens/SelfQuestionsScreen";
 import { WaitingScreen } from "./screens/WaitingScreen";
 import { GameScreen } from "./screens/GameScreen";
@@ -21,6 +23,10 @@ export default function App() {
   const [phase, setPhase] = useState<GamePhase>("LOGIN");
   const [user, setUser] = useState<AppUser | null>(null);
   const [eventId, setEventId] = useState<string | null>(null);
+  const [eventEntry, setEventEntry] = useState<{
+    alreadyAnswered: boolean;
+    isStarted: boolean;
+  } | null>(null);
   const [booting, setBooting] = useState(true);
   const [showAdmin, setShowAdmin] = useState(false);
 
@@ -49,6 +55,26 @@ export default function App() {
     });
 
     return () => subscription.unsubscribe();
+  }, []);
+
+  // Clear MCQ cache when the current event is reset (is_started → false)
+  useEffect(() => {
+    const channel = supabase
+      .channel("event-reset-watch")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "events" },
+        (payload) => {
+          const updated = payload.new as { is_started?: boolean };
+          if (updated.is_started === false && playerIdRef.current) {
+            clearMCQCache(playerIdRef.current);
+          }
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Subscribe to new events being inserted — so all active players get moved to the newest event
@@ -103,11 +129,11 @@ export default function App() {
       const result = await loadOrCreateEvent(player.id);
       if (result) {
         setEventId(result.eventId);
-        if (result.isStarted) {
-          setPhase("GAME");
-        } else {
-          setPhase(result.alreadyAnswered ? "WAITING" : "SELF_QUESTIONS");
-        }
+        setEventEntry({
+          alreadyAnswered: result.alreadyAnswered,
+          isStarted: result.isStarted,
+        });
+        setPhase("DASHBOARD");
       }
     }
     setBooting(false);
@@ -161,9 +187,18 @@ export default function App() {
       isStarted: event.is_started ?? false,
     };
   }
+  function handleEnterEvent() {
+    if (!eventEntry) return;
+    if (eventEntry.isStarted) {
+      setPhase("GAME");
+    } else {
+      setPhase(eventEntry.alreadyAnswered ? "WAITING" : "SELF_QUESTIONS");
+    }
+  }
+
   if (booting) {
     return (
-      <div className="max-w-md mx-auto min-h-dvh flex items-center justify-center bg-[#0a0a0a]">
+      <div className="w-full max-w-md mx-auto min-h-dvh flex items-center justify-center bg-[#0a0a0a]">
         <span className="w-6 h-6 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
       </div>
     );
@@ -171,14 +206,14 @@ export default function App() {
 
   if (!user) {
     return (
-      <div className="max-w-md mx-auto min-h-dvh">
+      <div className="w-full max-w-md mx-auto min-h-dvh">
         <LoginScreen />
       </div>
     );
   }
 
   return (
-    <div className="max-w-md mx-auto min-h-dvh">
+    <div className="w-full max-w-md mx-auto min-h-dvh">
       {/* Floating admin button */}
       {user.isAdmin && (
         <button
@@ -198,6 +233,14 @@ export default function App() {
         />
       )}
 
+      {phase === "DASHBOARD" && (
+        <DashboardScreen
+          user={user}
+          currentEventId={eventId}
+          eventEntry={eventEntry}
+          onEnterEvent={handleEnterEvent}
+        />
+      )}
       {phase === "SELF_QUESTIONS" && (
         <SelfQuestionsScreen
           user={user}
@@ -217,6 +260,7 @@ export default function App() {
           user={user}
           eventId={eventId!}
           onNavigateToInstructions={() => setPhase("INSTRUCTIONS")}
+          onNavigateToDashboard={() => setPhase("DASHBOARD")}
         />
       )}
       {phase === "INSTRUCTIONS" && (

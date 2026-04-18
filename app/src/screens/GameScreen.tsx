@@ -7,20 +7,36 @@ interface GameScreenProps {
   user: AppUser;
   eventId: string;
   onNavigateToInstructions: () => void;
+  onNavigateToDashboard: () => void;
 }
 
-/** Pick a random underscore position in displayed_clue and reveal it from daily_clue. */
-function revealOneRandom(dailyClue: string, displayedClue: string): string {
+const LETTERS_PER_CORRECT = 1;
+
+/** Pick N random underscore positions in displayed_clue and reveal them from daily_clue. */
+function revealRandom(
+  dailyClue: string,
+  displayedClue: string,
+  count = LETTERS_PER_CORRECT
+): string {
   const hiddenPositions: number[] = [];
   for (let i = 0; i < displayedClue.length; i++) {
     if (displayedClue[i] === "_") hiddenPositions.push(i);
   }
   if (hiddenPositions.length === 0) return displayedClue;
-  const idx =
-    hiddenPositions[Math.floor(Math.random() * hiddenPositions.length)];
-  return (
-    displayedClue.slice(0, idx) + dailyClue[idx] + displayedClue.slice(idx + 1)
-  );
+  // Shuffle and take up to `count` positions
+  for (let i = hiddenPositions.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [hiddenPositions[i], hiddenPositions[j]] = [
+      hiddenPositions[j],
+      hiddenPositions[i],
+    ];
+  }
+  const toReveal = hiddenPositions.slice(0, count);
+  let result = displayedClue;
+  for (const idx of toReveal) {
+    result = result.slice(0, idx) + dailyClue[idx] + result.slice(idx + 1);
+  }
+  return result;
 }
 
 function countRevealed(displayed: string): number {
@@ -35,6 +51,7 @@ export function GameScreen({
   user,
   eventId,
   onNavigateToInstructions,
+  onNavigateToDashboard,
 }: GameScreenProps) {
   const [dailyClue, setDailyClue] = useState<string>("");
   const [displayedClue, setDisplayedClue] = useState<string>("");
@@ -47,6 +64,9 @@ export function GameScreen({
   const [loadingMCQs, setLoadingMCQs] = useState(true);
   const [mcqError, setMcqError] = useState<string | null>(null);
   const [loadingClue, setLoadingClue] = useState(true);
+  const [genProgress, setGenProgress] = useState(0);
+  const genRafRef = useRef<number | null>(null);
+  const genStartRef = useRef<number | null>(null);
   // Keep a ref so the correct-answer handler always has fresh values without stale closure
   const clueRef = useRef({ daily: "", displayed: "" });
 
@@ -101,19 +121,47 @@ export function GameScreen({
     };
   }, [eventId]);
 
+  function startGenProgress() {
+    setGenProgress(0);
+    genStartRef.current = performance.now();
+    const tick = () => {
+      const elapsed = (performance.now() - genStartRef.current!) / 1000;
+      const progress = 95 * (1 - Math.exp(-elapsed / 7));
+      setGenProgress(progress);
+      genRafRef.current = requestAnimationFrame(tick);
+    };
+    genRafRef.current = requestAnimationFrame(tick);
+  }
+
+  function stopGenProgress(cb: () => void) {
+    if (genRafRef.current !== null) cancelAnimationFrame(genRafRef.current);
+    setGenProgress(100);
+    setTimeout(cb, 400);
+  }
+
   useEffect(() => {
-    generateMCQs(user.id)
+    startGenProgress();
+    generateMCQs(user.id, eventId)
       .then(({ questions }) => {
         // Filter out questions about the current player — you shouldn't get quizzed about yourself.
         // If filtering removes everything (e.g. only 1 player), fall back to the full set.
         const filtered = questions.filter(
           (q) => q.aboutPlayer.toLowerCase() !== user.name.toLowerCase()
         );
-        setQuestions(filtered.length > 0 ? filtered : questions);
+        stopGenProgress(() => {
+          setQuestions(filtered.length > 0 ? filtered : questions);
+          setLoadingMCQs(false);
+        });
       })
-      .catch((err) => setMcqError(err.message ?? "Failed to load questions"))
-      .finally(() => setLoadingMCQs(false));
-  }, [user.id, user.name]);
+      .catch((err) => {
+        if (genRafRef.current !== null) cancelAnimationFrame(genRafRef.current);
+        setMcqError(err.message ?? "Failed to load questions");
+        setLoadingMCQs(false);
+      });
+    return () => {
+      if (genRafRef.current !== null) cancelAnimationFrame(genRafRef.current);
+    };
+  }, [user.id, user.name]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cycle questions infinitely from the pool
   const question =
@@ -127,10 +175,7 @@ export function GameScreen({
   const allRevealed = totalLetters > 0 && revealedLetters >= totalLetters;
 
   async function handleCorrectAnswer() {
-    const next = revealOneRandom(
-      clueRef.current.daily,
-      clueRef.current.displayed
-    );
+    const next = revealRandom(clueRef.current.daily, clueRef.current.displayed);
     // Optimistic update so the current player sees it instantly
     setDisplayedClue(next);
     clueRef.current.displayed = next;
@@ -152,7 +197,20 @@ export function GameScreen({
   function handleNext() {
     setShowFeedback(false);
     setSelected(null);
-    setQuestionIndex((i) => i + 1);
+    setQuestionIndex((i) => {
+      const next = i + 1;
+      if (questions.length > 0 && next % questions.length === 0) {
+        generateMCQs(user.id, eventId)
+          .then(({ questions: fresh }) => {
+            const filtered = fresh.filter(
+              (q) => q.type === 'who-is-it' || q.aboutPlayer.toLowerCase() !== user.name.toLowerCase()
+            );
+            setQuestions(filtered.length > 0 ? filtered : fresh);
+          })
+          .catch(() => {});
+      }
+      return next;
+    });
   }
 
   const isCorrect = correctOption ? selected === correctOption.id : false;
@@ -260,11 +318,26 @@ export function GameScreen({
             </button>
           </div>
         ) : loadingMCQs ? (
-          <div className="flex-1 flex flex-col items-center justify-center gap-3">
-            <span className="w-6 h-6 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
-            <p className="text-white/30 text-sm font-mono">
-              Generating questions…
-            </p>
+          <div className="flex-1 flex flex-col items-center justify-center px-2">
+            <div className="w-full max-w-xs">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm text-white/60 font-medium">
+                  Generating questions
+                </span>
+                <span className="text-xs font-mono text-white/30">
+                  {Math.round(genProgress)}%
+                </span>
+              </div>
+              <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-white transition-none"
+                  style={{ width: `${genProgress}%` }}
+                />
+              </div>
+              <p className="text-xs text-white/25 mt-3 text-center">
+                Hang tight, the crab is thinking… 🦀
+              </p>
+            </div>
           </div>
         ) : mcqError ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center">
@@ -273,12 +346,20 @@ export function GameScreen({
               onClick={() => {
                 setMcqError(null);
                 setLoadingMCQs(true);
-                generateMCQs(user.id)
-                  .then(({ questions }) => setQuestions(questions))
-                  .catch((err) =>
-                    setMcqError(err.message ?? "Failed to load questions")
-                  )
-                  .finally(() => setLoadingMCQs(false));
+                startGenProgress();
+                generateMCQs(user.id, eventId)
+                  .then(({ questions }) => {
+                    stopGenProgress(() => {
+                      setQuestions(questions);
+                      setLoadingMCQs(false);
+                    });
+                  })
+                  .catch((err) => {
+                    if (genRafRef.current !== null)
+                      cancelAnimationFrame(genRafRef.current);
+                    setMcqError(err.message ?? "Failed to load questions");
+                    setLoadingMCQs(false);
+                  });
               }}
               className="px-4 py-2 rounded-xl border border-white/20 text-white/50 text-sm active:scale-[0.98]"
             >
@@ -290,7 +371,9 @@ export function GameScreen({
             {/* Question header */}
             <div className="flex items-center justify-between mb-4">
               <p className="text-xs font-mono text-white/30 tracking-widest uppercase">
-                About {question.aboutPlayer}
+                {question.type === "who-is-it"
+                  ? "Who is it?"
+                  : `About ${question.aboutPlayer}`}
               </p>
               <p className="text-xs font-mono text-white/20">
                 Q{(questionIndex % questions.length) + 1}/{questions.length}
@@ -306,7 +389,7 @@ export function GameScreen({
 
             {/* Options */}
             <div className="flex flex-col gap-2.5 flex-1">
-              {question.options.map((option) => {
+              {question.options.map((option, optionIndex) => {
                 let cls = "btn-option";
                 if (showFeedback) {
                   if (option.isCorrect) cls = "btn-option btn-option-correct";
@@ -321,7 +404,7 @@ export function GameScreen({
                     onClick={() => handleSelect(option.id)}
                   >
                     <span className="font-mono text-white/25 mr-3 text-xs">
-                      {option.id.toUpperCase()}
+                      {String.fromCharCode(65 + optionIndex)}
                     </span>
                     {option.text}
                   </button>
@@ -340,7 +423,7 @@ export function GameScreen({
                   }`}
                 >
                   {isCorrect
-                    ? `✓ Correct! A letter was revealed.`
+                    ? `✓ Correct! ${LETTERS_PER_CORRECT} letter revealed.`
                     : `✗ The answer was "${correctOption.text}".`}
                 </div>
                 <button
@@ -387,6 +470,13 @@ export function GameScreen({
                            active:scale-[0.98] transition-all hover:bg-white/5"
               >
                 Keep answering questions
+              </button>
+              <button
+                onClick={onNavigateToDashboard}
+                className="w-full py-3.5 rounded-2xl text-white/30 font-medium text-sm
+                           active:scale-[0.98] transition-all hover:text-white/50"
+              >
+                ← Back to dashboard
               </button>
             </div>
           </div>

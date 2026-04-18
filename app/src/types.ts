@@ -1,4 +1,4 @@
-export type GamePhase = 'LOGIN' | 'SELF_QUESTIONS' | 'WAITING' | 'GAME' | 'INSTRUCTIONS'
+export type GamePhase = 'LOGIN' | 'DASHBOARD' | 'SELF_QUESTIONS' | 'WAITING' | 'GAME' | 'INSTRUCTIONS'
 
 // DB game state (from Supabase realtime)
 export type DbGameStatus = 'waiting' | 'active' | 'finished'
@@ -30,9 +30,25 @@ export interface QuestionOption {
   isCorrect: boolean
 }
 
+export interface EventSummary {
+  id: string
+  createdAt: string
+  playerCount: number
+  clueText: string | null
+  status: DbGameStatus
+}
+
+export interface Contact {
+  id: string
+  name: string
+  emoji: string
+  email: string | null
+}
+
 export interface MCQQuestion {
   id: string
   text: string
   aboutPlayer: string
+  type?: 'about-player' | 'who-is-it'
   options: QuestionOption[]
 }

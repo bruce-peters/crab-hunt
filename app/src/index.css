@@ -21,10 +21,14 @@
     border-color: hsl(var(--border));
   }
 
-  html, body, #root {
+  html,
+  body,
+  #root {
     height: 100%;
     margin: 0;
     padding: 0;
+    overflow-x: hidden;
+    max-width: 100vw;
   }
 
   body {
@@ -43,24 +47,36 @@
 
 @layer components {
   .btn-option {
-    @apply w-full py-4 px-5 rounded-2xl border border-white/20 text-white/70 font-medium text-left text-sm
-           transition-all duration-150 active:scale-[0.98];
+    @apply w-full py-4 px-5 rounded-2xl border border-white/20 text-white/70 font-medium text-left text-sm transition-all duration-150 active:scale-[0.98];
   }
+
   .btn-option:hover {
     @apply border-white/50 bg-white/5 text-white;
   }
+
   .btn-option-selected {
     @apply border-white bg-white/10 text-white;
   }
+
   .btn-option-correct {
     @apply border-green-400 bg-green-400/10 text-green-300 pointer-events-none;
   }
+
   .btn-option-wrong {
     @apply border-white/10 bg-transparent text-white/25 pointer-events-none;
   }
 }
 
 /* thin scrollbar */
-::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 2px;
+}
