@@ -65,43 +65,53 @@ const ALL_QUESTIONS: Question[] = [
   // Pick & explain
   {
     id: "p1",
-    text: "Cats or dogs? Why?",
-    placeholder: "Pick a side. No neutrals.",
+    text: "Cats or dogs? Pick a side and tell us why.",
+    placeholder: "e.g. Dogs — they actually seem happy to see you",
   },
   {
     id: "p2",
-    text: "Sweet or savoury? What's your go-to?",
-    placeholder: "e.g. savoury, I could eat cheese forever",
+    text: "Sweet or savoury? What's your go-to and why?",
+    placeholder: "e.g. Savoury — I could eat cheese forever and feel zero guilt",
   },
   {
     id: "p3",
-    text: "Morning person or night owl?",
-    placeholder: "e.g. night owl, best ideas hit at midnight",
+    text: "Morning person or night owl? What does that actually look like for you?",
+    placeholder: "e.g. Night owl — best ideas hit at midnight, mornings are a write-off",
   },
   {
     id: "p4",
-    text: "Beach or mountains?",
-    placeholder: "Pick one and sell it",
+    text: "Beach or mountains? Sell it.",
+    placeholder: "e.g. Mountains — I love the quiet, the views, and not getting sand everywhere",
   },
   {
     id: "p5",
-    text: "Tea or coffee? How do you take it?",
-    placeholder: "e.g. oat flat white, always",
+    text: "Tea or coffee? How do you take it and why?",
+    placeholder: "e.g. Oat flat white — anything else is not coffee",
   },
   {
     id: "p6",
-    text: "Texter or caller?",
-    placeholder: "e.g. texter, I panic when my phone rings",
+    text: "Texter or caller? Be honest about why.",
+    placeholder: "e.g. Texter — I panic when my phone rings unexpectedly",
   },
   {
     id: "p7",
-    text: "Cook at home or eat out? What's your usual order?",
-    placeholder: "e.g. eat out, same Thai place every week",
+    text: "Cook at home or eat out? What's your usual move?",
+    placeholder: "e.g. Same Thai place every week — I've tried cooking, it ends badly",
   },
   {
     id: "p8",
-    text: "Spicy or mild? How far do you actually go?",
-    placeholder: "e.g. hot sauce on everything",
+    text: "Spicy or mild? Where do you actually draw the line?",
+    placeholder: "e.g. Hot sauce on everything, but I regret it every single time",
+  },
+  {
+    id: "p9",
+    text: "Planner or spontaneous? Give an example.",
+    placeholder: "e.g. Planner — I have a spreadsheet for holidays and I'm not sorry",
+  },
+  {
+    id: "p10",
+    text: "City or countryside? What does your ideal setting feel like?",
+    placeholder: "e.g. City — I need noise, food options, and things happening",
   },
 ]
 
@@ -120,16 +130,45 @@ function shuffle<T>(arr: T[]): T[] {
   return out
 }
 
+// Simple seeded PRNG (mulberry32) — deterministic for a given seed
+function seededRandom(seed: number): () => number {
+  let s = seed
+  return () => {
+    s |= 0; s = s + 0x6D2B79F5 | 0
+    let t = Math.imul(s ^ s >>> 15, 1 | s)
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t
+    return ((t ^ t >>> 14) >>> 0) / 4294967296
+  }
+}
+
+// Convert a UUID string to a numeric seed
+function uuidToSeed(uuid: string): number {
+  const hex = uuid.replace(/-/g, "").slice(0, 8)
+  return parseInt(hex, 16)
+}
+
+function seededShuffle<T>(arr: T[], seed: number): T[] {
+  const out = [...arr]
+  const rand = seededRandom(seed)
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1))
+    ;[out[i], out[j]] = [out[j], out[i]]
+  }
+  return out
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders })
   }
 
   let playerId: string | null = null
+  let eventId: string | null = null
 
   try {
     const body = await req.json()
     playerId = body.player_id ?? null
+    eventId = body.event_id ?? null
   } catch {
     // no body — return random questions without filtering
   }
@@ -156,15 +195,19 @@ Deno.serve(async (req: Request) => {
   const shortPool = shuffle(
     ALL_QUESTIONS.filter((q) => q.id.startsWith("q") && !answeredQuestionTexts.includes(q.text))
   )
-  const pickPool = shuffle(
-    ALL_QUESTIONS.filter((q) => q.id.startsWith("p") && !answeredQuestionTexts.includes(q.text))
-  )
 
-  // Fall back to full pool if we've run out of fresh questions
+  // Use event_id as seed so everyone in the same event gets the same p* question
+  const pickAllFresh = ALL_QUESTIONS.filter((q) => q.id.startsWith("p") && !answeredQuestionTexts.includes(q.text))
+  const pickAll = ALL_QUESTIONS.filter((q) => q.id.startsWith("p"))
+  const pickSource = pickAllFresh.length >= 1 ? pickAllFresh : pickAll
+  const pickPool = eventId
+    ? seededShuffle(pickSource, uuidToSeed(eventId))
+    : shuffle(pickSource)
+
+  // Fall back to full pool if we've run out of fresh short questions
   const shorts = shortPool.length >= 2 ? shortPool : shuffle(ALL_QUESTIONS.filter((q) => q.id.startsWith("q")))
-  const picks = pickPool.length >= 1 ? pickPool : shuffle(ALL_QUESTIONS.filter((q) => q.id.startsWith("p")))
 
-  const picked = [...shorts.slice(0, 2), ...picks.slice(0, 1)]
+  const picked = [...shorts.slice(0, 2), ...pickPool.slice(0, 1)]
 
   return new Response(JSON.stringify(picked), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },

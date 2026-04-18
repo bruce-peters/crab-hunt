@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "../lib/supabase";
-import { generateMCQs } from "../lib/utils";
+import { generateMCQs, clearMCQCache } from "../lib/utils";
 import type { AppUser, MCQQuestion } from "../types";
 
 interface GameScreenProps {
@@ -202,17 +202,30 @@ export function GameScreen({
   function handleNext() {
     setShowFeedback(false);
     setSelected(null);
-    setQuestionIndex((i) => {
-      const next = i + 1;
-      if (questions.length > 0 && next % questions.length === 0) {
-        generateMCQs(user.id, eventId)
-          .then(({ questions: fresh }) => {
+    const next = questionIndex + 1;
+    if (questions.length > 0 && next % questions.length === 0) {
+      // Exhausted all questions — fetch a fresh batch, reset to index 0
+      clearMCQCache(user.id);
+      setLoadingMCQs(true);
+      startGenProgress();
+      generateMCQs(user.id, eventId)
+        .then(({ questions: fresh }) => {
+          stopGenProgress(() => {
             setQuestions(filterForUser(fresh));
-          })
-          .catch(() => {});
-      }
-      return next;
-    });
+            setQuestionIndex(0);
+            setLoadingMCQs(false);
+          });
+        })
+        .catch((err) => {
+          if (genRafRef.current !== null) cancelAnimationFrame(genRafRef.current);
+          // On error, just cycle back to the start of the existing questions
+          setQuestionIndex(0);
+          setLoadingMCQs(false);
+          setMcqError(err.message ?? "Failed to load questions");
+        });
+    } else {
+      setQuestionIndex(next);
+    }
   }
 
   const isCorrect = correctOption ? selected === correctOption.id : false;

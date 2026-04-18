@@ -82,10 +82,11 @@ Deno.serve(async (req) => {
       playerMap[p.id] = { name: p.name, emoji: p.emoji }
     }
 
-    // ── 3. Fetch ALL self_answers for the event ────────────────────────────────
+    // ── 3. Fetch self_answers for this event only ────────────────────────────────
     const { data: answers, error: answersError } = await supabase
       .from("self_answers")
       .select("player_id, question, answer")
+      .eq("event_id", eventId)
       .in("player_id", playerIds)
 
     if (answersError) return json({ error: answersError.message }, 500)
@@ -119,36 +120,39 @@ Deno.serve(async (req) => {
 
     const prompt = `You are crafting fun "get to know you" multiple-choice questions for a scavenger hunt game.
 
-Based on the answers each player gave about themselves, generate exactly 10 MCQ questions that help players learn fun, light-hearted things about each other.
+Based on the answers each player gave about themselves THIS SESSION, generate exactly 10 MCQ questions that help players learn fun, surprising things about each other.
 
-Keep questions easy, breezy, and fun — think "cats vs dogs", "controversial food opinion", "go-to karaoke song". Nothing too deep or serious. The goal is laughs and quick answers, not soul-searching.
+The goal is laughs, light-bulb moments, and a little friendly roasting — not soul-searching. Lean into the quirky, specific, and unexpected details in the answers. Quotes and paraphrases of real answers make the best questions.
 
 There are TWO question types you must mix together:
 
 TYPE 1 — "about-player": Ask something about a specific named player.
-  Example: "What is Alex's most controversial food opinion?" with answer options.
+  Example: "What did Alex say is their most controversial food opinion?"
   - Use the player's name in the question text.
-  - Options are content choices (not player names).
+  - Options are content choices (NOT player names).
+  - For pick-and-explain answers (e.g. "cats or dogs: dogs, because they're loyal"), the correct answer should reflect the player's actual choice AND their reasoning — make the wrong options plausible alternatives.
 
 TYPE 2 — "who-is-it": Ask which player matches a description, without naming them.
-  Example: "Who said their go-to karaoke song is Mr Brightside?"
+  Example: "Who said they're a night owl because their best ideas hit at midnight?"
   - Do NOT mention the player's name in the question text.
-  - The 4 options are player names (all players in the game, with their emoji).
+  - The 4 options are ALL player names with emoji (every player in the game).
   - The correct option is the player whose answer inspired the question.
-  - "aboutPlayer" should still be set to the correct player's name (without emoji).
+  - "aboutPlayer" should be set to the correct player's name (without emoji).
+  - Quote or closely paraphrase something distinctive the player actually said — not a vague generalisation.
 
 Rules (both types):
 - Generate exactly 5 "about-player" questions and 5 "who-is-it" questions.
-- Spread questions across as many different players as possible.
-- Generate a MAXIMUM of 3 questions about any single player (across both types combined).
-- NEVER generate a question where the person being asked IS the subject (set "aboutPlayer" correctly so the app can filter).
-- Base every question on something a player actually said in their answers.
-- Wrong answer options should be plausible but clearly incorrect.
-- Keep tone fun, warm, and light-hearted.
+- Spread questions evenly across as many different players as possible.
+- Generate a MAXIMUM of 2 questions about any single player (across both types combined), unless there are fewer than 5 players.
+- NEVER generate a question where the person being asked IS the subject (use "aboutPlayer" to filter this server-side — set it correctly).
+- Base EVERY question strictly on something a player actually said in the profiles below. No invented facts.
+- For "about-player" questions, wrong options should be specific and plausible (not obviously silly), drawn from other players' answers where possible.
+- For "who-is-it" questions, the quoted detail should be distinctive enough that it genuinely identifies the person.
+- Keep tone fun, warm, and light-hearted. A little cheeky is good.
 
-Players in this game (for "who-is-it" option lists): ${playerNames.join(', ')}
+Players in this game (use these exact strings for "who-is-it" option text): ${playerNames.join(', ')}
 
-Player profiles:
+Player profiles (THIS SESSION only):
 ${playerProfiles}
 
 Return ONLY valid JSON — no markdown, no code fences, no extra text:
@@ -169,7 +173,7 @@ Return ONLY valid JSON — no markdown, no code fences, no extra text:
     {
       "id": "q2",
       "type": "who-is-it",
-      "text": "Who said their ideal Saturday is a spontaneous road trip with no plan?",
+      "text": "Who said they're a night owl because their best ideas hit at midnight?",
       "aboutPlayer": "Sam",
       "options": [
         { "id": "a", "text": "Bruce 🦀", "isCorrect": false },

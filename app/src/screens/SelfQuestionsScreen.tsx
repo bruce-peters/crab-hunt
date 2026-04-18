@@ -23,7 +23,9 @@ export function SelfQuestionsScreen({
     async function init() {
       const { data: qs, error: fnErr } = await supabase.functions.invoke<
         SelfQuestion[]
-      >("get-self-questions", { body: { player_id: user.id } });
+      >("get-self-questions", {
+        body: { player_id: user.id, event_id: eventId },
+      });
       if (fnErr || !qs) {
         setError("Could not load questions. Please refresh.");
         setLoading(false);

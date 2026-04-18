@@ -72,41 +72,38 @@ Deno.serve(async (req) => {
       playerMap[p.id] = { name: p.name, emoji: p.emoji }
     }
 
-    // ── 3. Fetch ALL historical self_answers for these players ─────────────────
-    // We use the full history across all events to find the richest similarities.
-    // Later answers for the same question overwrite earlier ones (handled in step 4).
+    // ── 3. Fetch self_answers for this event only ────────────────────────────────
     const { data: allAnswers, error: answersError } = await supabase
       .from("self_answers")
-      .select("player_id, question, answer, created_at")
+      .select("player_id, question, answer")
+      .eq("event_id", event_id)
       .in("player_id", playerIds)
-      .order("created_at", { ascending: true })
 
     if (answersError) return json({ error: answersError.message }, 500)
 
     if (!allAnswers || allAnswers.length === 0) {
       return json({
         skipped: true,
-        reason: "No self-answers found for these players across any event",
+        reason: "No self-answers found for this event",
         player_ids: playerIds,
       })
     }
 
-    // ── 4. Build player profiles (group Q&A by player, dedup by question text) ─
-    const byPlayer: Record<string, { name: string; emoji: string; qa: Map<string, string> }> = {}
+    // ── 4. Build player profiles (group Q&A by player) ────────────────────────
+    const byPlayer: Record<string, { name: string; emoji: string; qa: { q: string; a: string }[] }> = {}
     for (const row of allAnswers) {
       const p = playerMap[row.player_id]
       if (!p) continue
       if (!byPlayer[row.player_id]) {
-        byPlayer[row.player_id] = { name: p.name, emoji: p.emoji, qa: new Map() }
+        byPlayer[row.player_id] = { name: p.name, emoji: p.emoji, qa: [] }
       }
-      // Later answers overwrite earlier ones for the same question
-      byPlayer[row.player_id].qa.set(row.question, row.answer)
+      byPlayer[row.player_id].qa.push({ q: row.question, a: row.answer })
     }
 
     const playerProfiles = Object.values(byPlayer)
       .map(p =>
         `Player: ${p.name} ${p.emoji}\n` +
-        Array.from(p.qa.entries()).map(([q, a]) => `  Q: ${q}\n  A: ${a}`).join("\n")
+        p.qa.map(({ q, a }) => `  Q: ${q}\n  A: ${a}`).join("\n")
       )
       .join("\n\n")
 
@@ -116,27 +113,29 @@ Deno.serve(async (req) => {
     const openaiKey = Deno.env.get("OPENAI_API_KEY")
     if (!openaiKey) return json({ error: "OPENAI_API_KEY not set" }, 500)
 
-    const prompt = `You are designing the final clue questions for a group scavenger hunt game.
+    const prompt = `You are designing the final clue questions for a scavenger hunt game played by a group of friends.
 
 The group has ${players.length} players: ${playerNames}.
 
-Each player answered personal "get to know you" questions (drawn from all their previous sessions). Your job is to:
-1. Study all the answers and find interesting similarities or patterns across the group (e.g. shared hobbies, foods, opinions, habits, places).
-2. Pick the TWO most fun or surprising similarities and craft TWO different number-based questions about them.
-3. Each answer must be a whole number between 1 and ${players.length}.
+Each player answered fun "get to know you" questions for THIS session. Your job is to:
+1. Carefully read every answer and look for genuine similarities, overlaps, or surprising patterns across the group — e.g. shared food opinions, mutual habits, same picks in a this-or-that question, common experiences.
+2. Count precisely: for each candidate topic, count EXACTLY how many players answered in a way that matches.
+3. Pick the TWO most fun or surprising similarities and turn each into a "how many people in the group…?" question.
+4. Each answer must be a whole number between 1 and ${players.length}.
 
-Example questions (do NOT copy these, invent your own based on the actual answers):
-- "How many people in the group have visited more than 3 countries?"
-- "How many people in the group like pineapple on pizza?"
-- "How many people in the group have a pet at home?"
+What makes a great question:
+- Based on a clear, verifiable count from the answers below — no guessing.
+- Surprising or reveals something fun about the group dynamic.
+- Specific enough to be unambiguous (e.g. "prefer savoury over sweet" not just "like food").
+- About DIFFERENT topics from each other.
 
-Rules:
-- Each question must be answerable purely from the answers given below — do NOT invent facts.
-- Each answer MUST be a whole number.
-- The two questions must be about DIFFERENT topics.
-- Keep tone fun and light-hearted.
+Strict rules:
+- ONLY use information explicitly stated in the answers below — never invent or assume.
+- Double-check your count before writing the answer.
+- Both questions must have different answers (avoid two questions that both equal ${players.length} or both equal 1).
+- Keep tone warm, playful, and light-hearted.
 
-Player profiles:
+Player profiles (from this session only):
 ${playerProfiles}
 
 Return ONLY valid JSON with no markdown or code fences:
