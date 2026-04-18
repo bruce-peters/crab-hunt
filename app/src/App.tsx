@@ -73,6 +73,33 @@ export default function App() {
           if (updated.is_started === false && playerIdRef.current) {
             clearMCQCache(playerIdRef.current);
           }
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // Watch the current event for status changes (active → game, completed → success)
+  // Uses an eventId filter so it works correctly under RLS.
+  useEffect(() => {
+    if (!eventId) return;
+    const channel = supabase
+      .channel(`event-status-${eventId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "events",
+          filter: `id=eq.${eventId}`,
+        },
+        (payload) => {
+          const updated = payload.new as {
+            is_started?: boolean;
+            status?: string;
+          };
           if (updated.status === "completed") {
             setPhase("SUCCESS");
           }
@@ -87,7 +114,7 @@ export default function App() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [eventId]);
 
   // Subscribe to new events being inserted — so all active players get moved to the newest event
   useEffect(() => {

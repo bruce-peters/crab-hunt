@@ -66,21 +66,6 @@ export function AdminDashboard({
     setTimeout(() => setMessage(null), 3000);
   }
 
-  async function handleStartHunt() {
-    if (!event) return;
-    setActionLoading("start");
-    const { error } = await supabase
-      .from("events")
-      .update({ status: "active", is_started: true })
-      .eq("id", event.id);
-    if (error) flash("error", error.message);
-    else {
-      flash("success", "Hunt started! 🦀");
-      loadEvent();
-    }
-    setActionLoading(null);
-  }
-
   async function handleResetProgress() {
     if (!event) return;
     setActionLoading("reset");
@@ -241,39 +226,6 @@ export function AdminDashboard({
                   {event.daily_clue ?? "—"}
                 </p>
               </div>
-            </section>
-
-            {/* Start Hunt */}
-            <section>
-              <p className="text-xs font-mono text-white/30 uppercase tracking-widest mb-3">
-                Start Hunt
-              </p>
-              <p className="text-white/40 text-sm mb-4 leading-relaxed">
-                Marks the event as active and moves all waiting players into the
-                game.
-              </p>
-              <button
-                onClick={handleStartHunt}
-                disabled={
-                  actionLoading !== null ||
-                  event.status === "active" ||
-                  event.status === "completed"
-                }
-                className="w-full py-3.5 px-5 rounded-2xl border border-green-400/40 bg-green-400/8 text-green-300 font-medium text-sm hover:bg-green-400/15 hover:border-green-400/60 transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {actionLoading === "start" ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <span className="w-4 h-4 border-2 border-green-300/30 border-t-green-300/80 rounded-full animate-spin" />
-                    Starting…
-                  </span>
-                ) : event.status === "active" ? (
-                  "✓  Hunt already active"
-                ) : event.status === "completed" ? (
-                  "✓  Hunt completed"
-                ) : (
-                  "▶  Start the hunt"
-                )}
-              </button>
             </section>
 
             {/* Reset Progress */}

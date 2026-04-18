@@ -193,7 +193,7 @@ export function WaitingScreen({
             onClick={async () => {
               await supabase
                 .from("events")
-                .update({ is_started: true })
+                .update({ is_started: true, status: "active" })
                 .eq("id", eventId);
               onGameStart();
             }}
