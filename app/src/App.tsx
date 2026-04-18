@@ -203,7 +203,9 @@ export default function App() {
 
     if (!latest) return null;
 
-    const alreadyAnswered = (latest.answered_player_ids ?? []).includes(playerId);
+    const alreadyAnswered = (latest.answered_player_ids ?? []).includes(
+      playerId
+    );
     return {
       eventId: latest.id,
       alreadyAnswered,

@@ -150,6 +150,16 @@ Rules (both types):
 - For "who-is-it" questions, the quoted detail should be distinctive enough that it genuinely identifies the person.
 - Keep tone fun, warm, and light-hearted. A little cheeky is good.
 
+⚠️ CRITICAL — ANSWER-QUESTION COHERENCE ⚠️
+Every answer option MUST be a direct, sensible answer to the question being asked.
+- If the question is about comfort food, ALL options must be food items.
+- If the question is about a karaoke song, ALL options must be song titles.
+- If the question is about a movie or show, ALL options must be movies or shows.
+- NEVER mix answer categories across options (e.g. don't put a song title in a list of food answers).
+- NEVER use filler or unrelated content as a wrong option just to pad it out.
+- Wrong options should come from the same CATEGORY as the correct answer — ideally drawn from other players' actual answers to that same question.
+Before finalising each question, ask yourself: "Could someone reasonably read this question and interpret EVERY option as a plausible answer?" If not, fix it.
+
 Players in this game (use these exact strings for "who-is-it" option text): ${playerNames.join(', ')}
 
 Player profiles (THIS SESSION only):

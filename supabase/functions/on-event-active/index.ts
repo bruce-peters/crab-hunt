@@ -118,21 +118,21 @@ Deno.serve(async (req) => {
 The group has ${players.length} players: ${playerNames}.
 
 Each player answered fun "get to know you" questions for THIS session. Your job is to:
-1. Carefully read every answer and look for genuine similarities, overlaps, or surprising patterns across the group — e.g. shared food opinions, mutual habits, same picks in a this-or-that question, common experiences.
-2. Count precisely: for each candidate topic, count EXACTLY how many players answered in a way that matches.
-3. Pick the TWO most fun or surprising similarities and turn each into a "how many people in the group…?" question.
-4. Each answer must be a whole number between 1 and ${players.length}.
+1. Find the ONE "pick-and-explain" question that ALL (or the most) players answered — this will be the last question everyone had in common (typically phrased as a binary choice like "cats or dogs", "morning or night", etc.).
+2. Carefully read every player's answer to that shared question and look for genuine similarities, overlaps, or surprising patterns — e.g. everyone picked the same side, or a surprising majority went one way.
+3. Count precisely: for each candidate topic, count EXACTLY how many players answered in a way that matches.
+4. Turn the most fun or surprising similarity into a single "how many people in the group…?" question.
+5. The answer must be a whole number between 1 and ${players.length}.
 
 What makes a great question:
+- Focused on the shared "pick-and-explain" question that everyone answered.
 - Based on a clear, verifiable count from the answers below — no guessing.
 - Surprising or reveals something fun about the group dynamic.
-- Specific enough to be unambiguous (e.g. "prefer savoury over sweet" not just "like food").
-- About DIFFERENT topics from each other.
+- Specific enough to be unambiguous (e.g. "prefer dogs over cats" not just "like animals").
 
 Strict rules:
 - ONLY use information explicitly stated in the answers below — never invent or assume.
 - Double-check your count before writing the answer.
-- Both questions must have different answers (avoid two questions that both equal ${players.length} or both equal 1).
 - Keep tone warm, playful, and light-hearted.
 
 Player profiles (from this session only):
@@ -141,8 +141,7 @@ ${playerProfiles}
 Return ONLY valid JSON with no markdown or code fences:
 {
   "questions": [
-    {"q": "How many people in the group ...?", "a": 3},
-    {"q": "How many people in the group ...?", "a": 2}
+    {"q": "How many people in the group ...?", "a": 3}
   ]
 }`
 
@@ -170,7 +169,7 @@ Return ONLY valid JSON with no markdown or code fences:
       questions: { q: string; a: number }[]
     }
 
-    if (!Array.isArray(result.questions) || result.questions.length < 2) {
+    if (!Array.isArray(result.questions) || result.questions.length < 1) {
       return json({ error: "GPT returned unexpected structure", raw: result }, 502)
     }
 
