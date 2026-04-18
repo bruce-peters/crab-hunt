@@ -30,6 +30,7 @@ export function AdminDashboard({
   const [event, setEvent] = useState<EventRow | null>(null);
   const [newClue, setNewClue] = useState("");
   const [clueSeeded, setClueSeeded] = useState(false);
+  const [newEventClue, setNewEventClue] = useState(CLUE_TEXT);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [message, setMessage] = useState<{
@@ -111,7 +112,7 @@ export function AdminDashboard({
 
   async function handleNewEvent() {
     setActionLoading("new");
-    const clue = CLUE_TEXT;
+    const clue = newEventClue.trim() || CLUE_TEXT;
     const { data, error } = await supabase
       .from("events")
       .insert({
@@ -310,6 +311,16 @@ export function AdminDashboard({
                 Creates a fresh event. All players will be re-routed to the new
                 event on their next interaction.
               </p>
+
+              {/* Clue for new event */}
+              <textarea
+                value={newEventClue}
+                onChange={(e) => setNewEventClue(e.target.value)}
+                rows={3}
+                className="w-full bg-[#1a1a1a] border border-white/12 rounded-2xl px-4 py-3 text-white text-sm resize-none placeholder:text-white/25 focus:outline-none focus:border-white/30 transition-colors mb-3 caret-white"
+                placeholder="Secret clue for new event…"
+              />
+
               <button
                 onClick={handleNewEvent}
                 disabled={actionLoading !== null}
