@@ -224,12 +224,24 @@ Return ONLY valid JSON — no markdown, no code fences, no extra text:
     // Enforce max 3 questions per player — only applies to 'about-player' type.
     // 'who-is-it' questions are always kept regardless of how many reference the same player.
     const countByPlayer: Record<string, number> = {}
-    const questions = normalized.filter(q => {
+    const capped = normalized.filter(q => {
       if (q.type === 'who-is-it') return true
       const key = q.aboutPlayer.toLowerCase()
       countByPlayer[key] = (countByPlayer[key] ?? 0) + 1
       return countByPlayer[key] <= 3
     })
+
+    // Server-side: strip questions where the requesting player is the subject.
+    // Both types: 'about-player' (they'd be asked about themselves) and
+    // 'who-is-it' (they're the correct answer — trivially known).
+    // Fall back to the full capped set if all questions get removed (single-player dev mode).
+    const requestingPlayer = players.find((p: { id: string; name: string; emoji: string }) => p.id === requesting_player_id)
+    const questions = (() => {
+      if (!requestingPlayer) return capped
+      const name = requestingPlayer.name.toLowerCase()
+      const filtered = capped.filter(q => q.aboutPlayer.toLowerCase() !== name)
+      return filtered.length > 0 ? filtered : capped
+    })()
 
     return json({
       event_id: eventId,

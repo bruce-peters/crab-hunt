@@ -139,17 +139,22 @@ export function GameScreen({
     setTimeout(cb, 400);
   }
 
+  // Remove questions where the current player is the subject — they already know the answer.
+  // For 'about-player': they're being asked about themselves.
+  // For 'who-is-it': they're the correct answer, so they'd trivially know.
+  // Falls back to the full set if everything gets filtered (single-player debug mode).
+  function filterForUser(qs: MCQQuestion[]): MCQQuestion[] {
+    const name = user.name.toLowerCase();
+    const filtered = qs.filter((q) => q.aboutPlayer.toLowerCase() !== name);
+    return filtered.length > 0 ? filtered : qs;
+  }
+
   useEffect(() => {
     startGenProgress();
     generateMCQs(user.id, eventId)
       .then(({ questions }) => {
-        // Filter out questions about the current player — you shouldn't get quizzed about yourself.
-        // If filtering removes everything (e.g. only 1 player), fall back to the full set.
-        const filtered = questions.filter(
-          (q) => q.aboutPlayer.toLowerCase() !== user.name.toLowerCase()
-        );
         stopGenProgress(() => {
-          setQuestions(filtered.length > 0 ? filtered : questions);
+          setQuestions(filterForUser(questions));
           setLoadingMCQs(false);
         });
       })
@@ -202,10 +207,7 @@ export function GameScreen({
       if (questions.length > 0 && next % questions.length === 0) {
         generateMCQs(user.id, eventId)
           .then(({ questions: fresh }) => {
-            const filtered = fresh.filter(
-              (q) => q.type === 'who-is-it' || q.aboutPlayer.toLowerCase() !== user.name.toLowerCase()
-            );
-            setQuestions(filtered.length > 0 ? filtered : fresh);
+            setQuestions(filterForUser(fresh));
           })
           .catch(() => {});
       }
