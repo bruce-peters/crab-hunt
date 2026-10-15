@@ -2,6 +2,8 @@
 
 A real-time multiplayer scavenger hunt app for small groups. Players answer AI-generated "get to know you" questions about each other to progressively reveal a hidden location clue, then race to find a physical prize box.
 
+**Live app:** https://crab-hunt.vercel.app (sign up with an email to play; best on a phone)
+
 ---
 
 ## What it does
@@ -55,37 +57,64 @@ MCQ generation is handled by a Supabase Edge Function (`generate-mcqs`) that bui
 
 ## Getting started
 
-**Prerequisites:** Node.js 18+, npm.
+**Prerequisites:** Node.js 20.19+ or 22.12+ (required by Vite 7), npm.
+
+### 1. Run the frontend
 
 ```bash
 git clone https://github.com/bruce-peters/crab-hunt.git
 cd crab-hunt/app
-npm install
-npm run dev
+npm ci            # or: npm install
+npm run dev       # http://localhost:5173
 ```
 
-The app runs at `http://localhost:5173`.
+The committed `app/.env` points at the original Crab Hunt Supabase project, so the app starts and the sign-in page renders without any setup. To use your own backend, follow step 2 and then replace `app/.env` with your values. `app/.env.example` lists the variables:
 
-**Environment variables:** The app expects a `.env` file in `app/` with Supabase credentials:
+| Variable | Where to find it |
+|---|---|
+| `VITE_SUPABASE_URL` | Supabase dashboard → Project Settings → API |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` *or* `VITE_SUPABASE_ANON_KEY` | Same page. Use the public client key, never the `service_role` key. The publishable key is used if it is non-empty. |
 
-```
-VITE_SUPABASE_URL=your-supabase-url
-VITE_SUPABASE_ANON_KEY=your-anon-key
-```
-
-The Edge Functions require `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `OPENAI_API_KEY` set in the Supabase dashboard.
-
-To build for production:
+Other commands, all run in `app/`:
 
 ```bash
-npm run build
+npm run build     # type-check + production build into app/dist (includes a PWA service worker)
+npm run preview   # serve the production build
 ```
+
+### 2. Set up your own Supabase backend (free tier works)
+
+> Derived from the code in `supabase/`; not run end-to-end when this section was written (it needs a Supabase account).
+
+1. Create a project at [supabase.com](https://supabase.com). The free plan is enough.
+2. Install the [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started). `npx supabase ...` also works. Then link this repo from the repo root:
+   ```bash
+   npx supabase login
+   npx supabase link --project-ref <your-project-ref>
+   ```
+3. **Before pushing the migrations,** edit the hard-coded function URL in `supabase/migrations/20260418260000_fix_active_trigger.sql` and `20260418290000_trigger_on_is_started.sql`. Change `https://rrsijbdoqllgnyvcoyqs.supabase.co/functions/v1/on-event-active` to your project's URL. Then apply the schema (tables, RLS policies, the new-user trigger, and the `pg_net` trigger):
+   ```bash
+   npx supabase db push
+   ```
+4. Deploy the Edge Functions and set the OpenAI key. Supabase injects `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` into Edge Functions automatically, so the only secret you add is `OPENAI_API_KEY`. `on-event-active` is called from a Postgres trigger that sends no auth header, so deploy it with `--no-verify-jwt`.
+   ```bash
+   npx supabase secrets set OPENAI_API_KEY=sk-...
+   npx supabase functions deploy generate-mcqs get-self-questions check-all-answered get-number-question mark-event-solved
+   npx supabase functions deploy on-event-active --no-verify-jwt
+   ```
+5. Sign up in the app. A database trigger creates your `players` row. To get the admin dashboard (create, start, and reset events), make yourself an admin in the SQL editor:
+   ```sql
+   update players set is_admin = true where name = '<your name>';
+   ```
+6. Put your project URL and key in `app/.env` (step 1) and restart `npm run dev`.
+
+If email confirmation is on (the hosted default), new users must click the confirmation link before they can sign in. The app shows a "Check your email" screen in that case.
 
 ---
 
 ## Usage
 
-Open the app on a phone or mobile-sized browser window. Log in with a player name and password. Follow the phases: answer questions about yourself, wait in the lobby, then play through MCQs to reveal the clue.
+Open the app on a phone or mobile-sized browser window. Sign up or sign in with an email and password. Follow the phases: answer questions about yourself, wait in the lobby, then play through MCQs to reveal the clue.
 
 Admin users see an admin button after login that opens the dashboard for event management (creating events, setting the clue, activating the game).
 
@@ -114,6 +143,7 @@ crab-hunt/
 │           ├── SuccessScreen.tsx
 │           └── AdminDashboard.tsx
 └── supabase/
+    ├── migrations/                  # Postgres schema, RLS policies, triggers (apply with `supabase db push`)
     └── functions/
         ├── generate-mcqs/           # AI MCQ generation (GPT-4o-mini)
         ├── check-all-answered/      # Checks if all players submitted self-answers
