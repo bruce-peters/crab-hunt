@@ -181,8 +181,10 @@ export default function App() {
           alreadyAnswered: result.alreadyAnswered,
           isStarted: result.isStarted,
         });
-        setPhase("DASHBOARD");
       }
+      // Show the dashboard even when no event exists yet (it renders a
+      // "No active event" state); otherwise the screen stays blank.
+      setPhase("DASHBOARD");
     }
     setBooting(false);
   }
